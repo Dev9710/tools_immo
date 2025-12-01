@@ -1,0 +1,245 @@
+{% extends 'analyseur/base.html' %}
+
+{% block title %}Analyser Relevé - Banque Postale{% endblock %}
+
+{% block nav_style %}background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);{% endblock %}
+
+{% block nav_title %}Analyseur Banque Postale{% endblock %}
+
+{% block nav_buttons %}
+<a href="{% url 'accueil' %}" class="btn btn-outline-light">
+    <i class="bi bi-house"></i> Accueil
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row">
+        <div class="col-lg-10 mx-auto">
+            <div class="card shadow-lg border-0">
+                <div class="card-header text-white" style="background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);">
+                    <h2 class="mb-0 text-white">
+                        <i class="bi bi-file-earmark-pdf me-2"></i>
+                        Analyser votre relevé Banque Postale
+                    </h2>
+                    <p class="mb-0 mt-2 opacity-75">
+                        Parser optimisé pour le format réel "Vos opérations"
+                    </p>
+                </div>
+                <div class="card-body p-4">
+                    <div class="alert alert-success mb-4 border-0 shadow-sm">
+                        <h6><i class="bi bi-check-circle"></i> Format reconnu automatiquement :</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <small class="font-monospace bg-light p-2 d-block rounded">
+                                    Date&nbsp;&nbsp;&nbsp;&nbsp;Opération<br>
+                                    15/07&nbsp;&nbsp;&nbsp;ACHAT CB PAYPAL *UBER B<br>
+                                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;CARTE NUMERO 733<br>
+                                    15/07&nbsp;&nbsp;&nbsp;VIREMENT INSTANTANE A<br>
+                                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MME BISOLY LOSBAR ALLISO
+                                </small>
+                            </div>
+                            <div class="col-md-6">
+                                <small class="font-monospace bg-light p-2 d-block rounded">
+                                    Débit(€)&nbsp;&nbsp;&nbsp;Crédit(€)<br>
+                                    5,99<br>
+                                    <br>
+                                    353,13<br>
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if error %}
+                    <div class="alert alert-danger border-0 shadow-sm">
+                        <h4><i class="bi bi-exclamation-triangle"></i> Erreur d'analyse</h4>
+                        <p><strong>Détail :</strong> {{ error }}</p>
+                        <hr>
+                        <h6>Conseils de dépannage :</h6>
+                        <ul>
+                            <li>Vérifiez que c'est bien un relevé Banque Postale au format PDF</li>
+                            <li>Le relevé doit contenir la section "Vos opérations"</li>
+                            <li>Assurez-vous que le PDF n'est pas protégé en écriture</li>
+                        </ul>
+                    </div>
+                    {% endif %}
+
+                    <form method="post" enctype="multipart/form-data" id="uploadForm">
+                        {% csrf_token %}
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="mb-4">
+                                    <label class="form-label fw-bold">
+                                        <i class="bi bi-file-earmark-pdf text-danger"></i>
+                                        Relevé Banque Postale (PDF)
+                                    </label>
+                                    <input type="file" class="form-control form-control-lg" name="fichier_pdf" accept=".pdf" required>
+                                    <div class="form-text">
+                                        <strong>Compatible :</strong> Relevés avec section "Vos opérations"
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card bg-primary bg-opacity-10 border-primary">
+                                    <div class="card-body text-center">
+                                        <i class="bi bi-robot text-primary display-6"></i>
+                                        <h6 class="mt-2 text-primary">Parser automatique</h6>
+                                        <small>Traite les 4 pages du relevé</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-funnel"></i> Types d'opérations à analyser :
+                            </label>
+                            <div class="row g-3">
+                                <div class="col-md-6 col-lg-3">
+                                    <div class="card h-100 border-danger bg-danger bg-opacity-10">
+                                        <div class="card-body text-center p-3">
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" name="achat" id="achat" value="1" checked>
+                                                <label class="form-check-label fw-bold text-danger" for="achat">
+                                                    Achats CB
+                                                </label>
+                                            </div>
+                                            <small class="text-muted d-block">
+                                                PAYPAL *UBER, CB INTERSPORT, IMMOBILIERE
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 col-lg-3">
+                                    <div class="card h-100 border-warning bg-warning bg-opacity-10">
+                                        <div class="card-body text-center p-3">
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" name="debit" id="debit" value="1" checked>
+                                                <label class="form-check-label fw-bold text-warning" for="debit">
+                                                    Prélèvements
+                                                </label>
+                                            </div>
+                                            <small class="text-muted d-block">
+                                                PRELEVEMENT DE, ORANGE, TRESOR PUBLIC
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 col-lg-3">
+                                    <div class="card h-100 border-info bg-info bg-opacity-10">
+                                        <div class="card-body text-center p-3">
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" name="virement" id="virement" value="1">
+                                                <label class="form-check-label fw-bold text-info" for="virement">
+                                                    Virements
+                                                </label>
+                                            </div>
+                                            <small class="text-muted d-block">
+                                                VIREMENT INSTANTANE, VIREMENT POUR
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 col-lg-3">
+                                    <div class="card h-100 border-secondary bg-secondary bg-opacity-10">
+                                        <div class="card-body text-center p-3">
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" name="cheque" id="cheque" value="1">
+                                                <label class="form-check-label fw-bold text-secondary" for="cheque">
+                                                    Chèques
+                                                </label>
+                                            </div>
+                                            <small class="text-muted d-block">
+                                                CHEQUE N°, CHQ N°
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-center">
+                            <button type="submit" class="btn btn-lg px-5 shadow" style="background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; font-weight: bold;">
+                                <i class="bi bi-gear-fill me-2"></i>Parser PDF → Excel Multi-Onglets
+                            </button>
+                        </div>
+                    </form>
+                    
+                    <div class="mt-5">
+                        <h6 class="text-muted mb-3">Résultat Excel attendu :</h6>
+                        <div class="row g-2">
+                            <div class="col-6 col-md-3">
+                                <div class="card border-danger shadow-sm">
+                                    <div class="card-body p-2 text-center">
+                                        <i class="bi bi-credit-card text-danger mb-1"></i>
+                                        <small class="fw-bold d-block">Onglet Achats CB</small>
+                                        <small class="text-muted">SUPER U, etc.</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="card border-warning shadow-sm">
+                                    <div class="card-body p-2 text-center">
+                                        <i class="bi bi-arrow-down-circle text-warning mb-1"></i>
+                                        <small class="fw-bold d-block">Onglet Prélèvements</small>
+                                        <small class="text-muted">ORANGE, EDF, etc.</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="card border-info shadow-sm">
+                                    <div class="card-body p-2 text-center">
+                                        <i class="bi bi-arrow-left-right text-info mb-1"></i>
+                                        <small class="fw-bold d-block">Onglet Virements</small>
+                                        <small class="text-muted">SEPA, etc.</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="card border-secondary shadow-sm">
+                                    <div class="card-body p-2 text-center">
+                                        <i class="bi bi-file-earmark-check text-secondary mb-1"></i>
+                                        <small class="fw-bold d-block">Onglet Chèques</small>
+                                        <small class="text-muted">N° 9756003, etc.</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="text-center mt-4">
+                <a href="{% url 'accueil' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Retour à l'accueil
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('uploadForm').addEventListener('submit', function(e) {
+    const fileInput = document.querySelector('input[type="file"]');
+    const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+    const submitBtn = document.querySelector('button[type="submit"]');
+    
+    if (!fileInput.files.length) {
+        e.preventDefault();
+        alert('Veuillez sélectionner un fichier PDF');
+        return;
+    }
+    
+    if (checkboxes.length === 0) {
+        e.preventDefault();
+        alert('Veuillez sélectionner au moins un type d\'opération');
+        return;
+    }
+    
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Analyse en cours...';
+    submitBtn.disabled = true;
+});
+</script>
+{% endblock %}

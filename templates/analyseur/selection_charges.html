@@ -1,0 +1,240 @@
+{% extends 'analyseur/base.html' %}
+
+{% block title %}Sélection Charges Fixes par Mois{% endblock %}
+
+{% block nav_style %}background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);{% endblock %}
+
+{% block nav_title %}Sélection Charges Fixes{% endblock %}
+
+{% block nav_buttons %}
+<div class="navbar-text text-white d-flex align-items-center">
+    <span class="me-3"><i class="bi bi-files"></i> Fichier(s): {{ nb_fichiers }}</span>
+    <strong class="me-3">Total: <span id="totalCharges" class="text-warning">0,00</span> €</strong>
+    <button class="btn btn-outline-light btn-sm" id="copyBtn" onclick="copyTotal()" title="Copier le montant">
+        <i class="bi bi-copy" id="copyIcon"></i>
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-lg-6 mx-auto">
+            <div class="card border-warning shadow">
+                <div class="card-header bg-warning text-dark text-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-calendar-month me-2"></i>Période de calcul
+                    </h5>
+                </div>
+                <div class="card-body p-3">
+                    <select class="form-select form-select-lg" id="moisFiltre" onchange="filtrerParMois()">
+                        <option value="tous">Période complète (tous les mois)</option>
+                        {% for mois_code, mois_nom in mois_disponibles %}
+                        <option value="{{ mois_code }}">{{ mois_nom }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text text-center mt-2">
+                        <strong>Recommandé :</strong> Sélectionnez un mois spécifique pour un calcul précis
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100 shadow border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-check-circle me-2"></i>
+                        <span id="prelevementsTitle">Prélèvements ({{ prelevements|length }})</span>
+                    </h5>
+                    <small class="opacity-75">Tous pré-sélectionnés comme charges fixes</small>
+                </div>
+                <div class="card-body p-0" style="max-height: 500px; overflow-y: auto;">
+                    <div id="prelevements-list">
+                        <!-- Sera rempli par JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100 shadow border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-credit-card me-2"></i>
+                        <span id="achatsTitle">Achats CB ({{ achats_cb|length }})</span>
+                    </h5>
+                    <small class="opacity-75">Sélectionnez vos abonnements/charges récurrentes</small>
+                </div>
+                <div class="card-body p-0" style="max-height: 500px; overflow-y: auto;">
+                    <div id="achats-list">
+                        <!-- Sera rempli par JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="text-center">
+        <button class="btn btn-outline-secondary me-3" onclick="window.history.back()">
+            <i class="bi bi-arrow-left"></i> Retour
+        </button>
+        <button class="btn btn-success btn-lg px-4 shadow" onclick="exportCharges()" id="exportBtn" disabled>
+            <i class="bi bi-download me-2"></i>Exporter les Charges Sélectionnées
+        </button>
+    </div>
+</div>
+
+<form id="exportForm" method="post" style="display: none;">
+    {% csrf_token %}
+    <input type="hidden" name="selected_operations" id="selectedOperations">
+    <input type="hidden" name="mois_filtre" id="moisFiltreInput">
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const prelevements = {{ prelevements_json|safe }};
+const achats = {{ achats_json|safe }};
+let selectedOperations = [];
+let currentFilter = 'tous';
+
+function filtrerParMois() {
+    currentFilter = document.getElementById('moisFiltre').value;
+    selectedOperations = [];
+    initPrelevements();
+    initAchats();
+    updateTotal();
+}
+
+function filtrerOperations(operations) {
+    if (currentFilter === 'tous') return operations;
+    return operations.filter(op => op.mois === currentFilter);
+}
+
+function initPrelevements() {
+    const container = document.getElementById('prelevements-list');
+    const prelevementsFiltres = filtrerOperations(prelevements);
+    
+    container.innerHTML = '';
+    document.getElementById('prelevementsTitle').textContent = 
+        `Prélèvements (${prelevementsFiltres.length})`;
+    
+    prelevementsFiltres.forEach((op, index) => {
+        selectedOperations.push(op);
+        container.innerHTML += createOperationCard(op, index, true, true, 'success');
+    });
+}
+
+function initAchats() {
+    const container = document.getElementById('achats-list');
+    const achatsFiltres = filtrerOperations(achats);
+    
+    container.innerHTML = '';
+    document.getElementById('achatsTitle').textContent = 
+        `Achats CB (${achatsFiltres.length})`;
+    
+    achatsFiltres.forEach((op, index) => {
+        container.innerHTML += createOperationCard(op, index + 1000, false, false, 'primary');
+    });
+}
+
+function createOperationCard(op, id, checked, disabled, color) {
+    const checkedAttr = checked ? 'checked' : '';
+    const disabledAttr = disabled ? 'disabled' : '';
+    
+    return `
+        <div class="border-bottom p-3 bg-${color} bg-opacity-10">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="op_${id}" 
+                       ${checkedAttr} ${disabledAttr} onchange="toggleOperation(${id}, this.checked)">
+                <label class="form-check-label w-100" for="op_${id}">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <strong class="text-${color}">${op.libelle}</strong><br>
+                            <small class="text-muted">${op.date}</small>
+                        </div>
+                        <div class="text-end">
+                            <strong class="text-${color}">${parseFloat(op.montant).toFixed(2)} €</strong>
+                        </div>
+                    </div>
+                </label>
+            </div>
+        </div>
+    `;
+}
+
+function toggleOperation(id, checked) {
+    const operation = id >= 1000 ? 
+        filtrerOperations(achats)[id - 1000] : 
+        filtrerOperations(prelevements)[id];
+    
+    if (checked) {
+        selectedOperations.push(operation);
+    } else {
+        selectedOperations = selectedOperations.filter(op => 
+            !(op.libelle === operation.libelle && op.date === operation.date)
+        );
+    }
+    
+    updateTotal();
+}
+
+function updateTotal() {
+    const total = selectedOperations.reduce((sum, op) => sum + parseFloat(op.montant), 0);
+    document.getElementById('totalCharges').textContent = total.toFixed(2);
+    document.getElementById('exportBtn').disabled = selectedOperations.length === 0;
+}
+
+function copyTotal() {
+    const total = document.getElementById('totalCharges').textContent;
+    const copyBtn = document.getElementById('copyBtn');
+    const copyIcon = document.getElementById('copyIcon');
+    
+    const tempInput = document.createElement('input');
+    tempInput.value = total.replace(',', '.');
+    document.body.appendChild(tempInput);
+    tempInput.select();
+    
+    try {
+        document.execCommand('copy');
+        copyIcon.className = 'bi bi-check-lg';
+        copyBtn.classList.remove('btn-outline-light');
+        copyBtn.classList.add('btn-success');
+        copyBtn.title = 'Copié !';
+        
+        setTimeout(() => {
+            copyIcon.className = 'bi bi-copy';
+            copyBtn.classList.remove('btn-success');
+            copyBtn.classList.add('btn-outline-light');
+            copyBtn.title = 'Copier le montant';
+        }, 2000);
+        
+    } catch (err) {
+        console.error('Erreur lors de la copie:', err);
+        alert('Impossible de copier automatiquement. Montant: ' + total + ' €');
+    }
+    
+    document.body.removeChild(tempInput);
+}
+
+function exportCharges() {
+    if (selectedOperations.length === 0) {
+        alert('Veuillez sélectionner au moins une opération');
+        return;
+    }
+    
+    document.getElementById('selectedOperations').value = JSON.stringify(selectedOperations);
+    document.getElementById('moisFiltreInput').value = currentFilter;
+    document.getElementById('exportForm').submit();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    initPrelevements();
+    initAchats();
+    updateTotal();
+});
+</script>
+{% endblock %}

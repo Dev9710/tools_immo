@@ -1,0 +1,151 @@
+{% extends 'analyseur/base.html' %}
+
+{% block title %}Accueil - Suite Immobilière{% endblock %}
+
+{% block content %}
+<section class="hero-section py-5">
+    <div class="container text-center">
+        <h1 class="display-4 fw-bold text-white mb-4">
+            Suite Complète d'Outils Immobiliers
+        </h1>
+        <p class="lead text-white mb-5">
+            Analysez vos relevés, calculez vos charges et simulez votre prêt immobilier
+        </p>
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="alert alert-light bg-white bg-opacity-90">
+                    <strong><i class="bi bi-rocket-takeoff me-2"></i>Workflow professionnel :</strong>
+                    Analyse → Calcul → Simulation → Dossier complet
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="py-5 bg-light">
+    <div class="container">
+        <div class="row g-4 justify-content-center">
+            <!-- Card 1: Analyse Standard -->
+            <div class="col-lg-4">
+                <div class="card h-100 shadow-lg border-0 card-hover">
+                    <div class="card-header text-white text-center py-4" style="background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);">
+                        <i class="bi bi-file-earmark-spreadsheet display-4 mb-3"></i>
+                        <h4 class="mb-0">Analyse des Relevés</h4>
+                    </div>
+                    <div class="card-body p-4">
+                        <h5 class="card-title text-center mb-4">Classification par type d'opération</h5>
+                        <ul class="list-unstyled">
+                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Achats CB</li>
+                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Prélèvements</li>
+                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Virements</li>
+                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Chèques</li>
+                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Dépôts</li>
+                        </ul>
+                        <div class="alert alert-info">
+                            <small><strong>Idéal pour :</strong> Vue d'ensemble organisée par catégories</small>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-transparent text-center p-4">
+                        <a href="{% url 'upload_releve' %}" class="btn btn-primary btn-lg px-4">
+                            <i class="bi bi-file-earmark-pdf me-2"></i>Analyser PDF
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 2: Calculateur Charges Fixes -->
+            <div class="col-lg-4">
+                <div class="card h-100 shadow-lg border-0 card-hover">
+                    <div class="card-header text-white text-center py-4" style="background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);">
+                        <i class="bi bi-calculator display-4 mb-3"></i>
+                        <h4 class="mb-0">Charges Fixes</h4>
+                    </div>
+                    <div class="card-body p-4">
+                        <h5 class="card-title text-center mb-4">Calculez vos charges mensuelles</h5>
+                        <ul class="list-unstyled">
+                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Prélèvements automatiques</li>
+                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Sélection d'achats CB</li>
+                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Filtrage par mois</li>
+                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Total mensuel précis</li>
+                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Export personnalisé</li>
+                        </ul>
+                        <div class="alert alert-success">
+                            <small><strong>Idéal pour :</strong> Calcul précis charges fixes</small>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-transparent text-center p-4">
+                        <a href="{% url 'charges_fixes' %}" class="btn btn-success btn-lg px-4">
+                            <i class="bi bi-calculator me-2"></i>Calculer
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 3: Simulateur Prêt -->
+            <div class="col-lg-4">
+                <div class="card h-100 shadow-lg border-0 card-hover">
+                    <div class="card-header text-white text-center py-4" style="background: linear-gradient(135deg, #6f42c1 0%, #5a2d91 100%);">
+                        <i class="bi bi-graph-up display-4 mb-3"></i>
+                        <h4 class="mb-0">Simulateur Prêt</h4>
+                    </div>
+                    <div class="card-body p-4">
+                        <h5 class="card-title text-center mb-4">Simulation de financement</h5>
+                        <ul class="list-unstyled">
+                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Capacité d'emprunt</li>
+                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Calcul mensualités</li>
+                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Taux par région/profil</li>
+                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Frais de notaire</li>
+                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Tableau amortissement</li>
+                        </ul>
+                        <div class="alert alert-warning">
+                            <small><strong>Idéal pour :</strong> Préparer son dossier immobilier</small>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-transparent text-center p-4">
+                        <a href="{% url 'simulateur_pret' %}" class="btn btn-lg px-4" style="background: linear-gradient(135deg, #6f42c1 0%, #5a2d91 100%); color: white;">
+                            <i class="bi bi-graph-up me-2"></i>Simuler
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section informative améliorée -->
+        <div class="row mt-5">
+            <div class="col-lg-10 mx-auto">
+                <div class="card bg-primary bg-opacity-10 border-primary shadow">
+                    <div class="card-body text-center p-4">
+                        <h5 class="text-primary mb-3">
+                            <i class="bi bi-tools me-2"></i>Suite complète pour votre projet immobilier
+                        </h5>
+                        <p class="mb-3">
+                            <strong>Workflow optimal :</strong> 
+                            Analysez vos relevés → Calculez vos charges fixes → Simulez votre capacité d'emprunt
+                        </p>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="d-flex align-items-center justify-content-center">
+                                    <i class="bi bi-1-circle-fill text-primary me-2 fs-4"></i>
+                                    <span class="small">Analyse PDF automatique</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="d-flex align-items-center justify-content-center">
+                                    <i class="bi bi-2-circle-fill text-success me-2 fs-4"></i>
+                                    <span class="small">Calcul charges précises</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="d-flex align-items-center justify-content-center">
+                                    <i class="bi bi-3-circle-fill text-warning me-2 fs-4"></i>
+                                    <span class="small">Simulation complète</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

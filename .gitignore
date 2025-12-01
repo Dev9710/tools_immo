@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Environnements virtuels
+venv/
+.venv/
+env/
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+/media/
+/staticfiles/
+
+# Données sensibles (relevés bancaires, exports)
+analyseur_bancaire/data/
+*.xlsx
+~$*.xlsx
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# OS / éditeurs
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

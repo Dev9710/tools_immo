@@ -1,0 +1,146 @@
+{% extends 'analyseur/base.html' %}
+
+{% block title %}Dashboard - Mon Dossier Immobilier{% endblock %}
+
+{% block nav_style %}background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);{% endblock %}
+
+{% block nav_title %}Mon Dossier Immobilier{% endblock %}
+
+{% block nav_buttons %}
+<a href="{% url 'accueil' %}" class="btn btn-outline-light">
+    <i class="bi bi-house"></i> Accueil
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row">
+        <div class="col-lg-10 mx-auto">
+            <div class="card shadow-lg border-0">
+                <div class="card-header text-white" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
+                    <h3 class="mb-0">
+                        <i class="bi bi-clipboard-data me-2"></i>Mon Dossier Immobilier
+                    </h3>
+                    <p class="mb-0 mt-2 opacity-75">Synthèse de votre situation financière</p>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row g-4 mb-4">
+                        <div class="col-md-3">
+                            <div class="card bg-success text-white shadow">
+                                <div class="card-body text-center p-3">
+                                    <i class="bi bi-wallet2 display-6 mb-2"></i>
+                                    <h6 class="mb-1">Revenus nets</h6>
+                                    <h4 class="mb-0">{{ dossier.revenus_nets|default:"0" }} €</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-warning text-dark shadow">
+                                <div class="card-body text-center p-3">
+                                    <i class="bi bi-calculator display-6 mb-2"></i>
+                                    <h6 class="mb-1">Charges fixes</h6>
+                                    <h4 class="mb-0">{{ dossier.charges_fixes|default:"0" }} €</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-info text-white shadow">
+                                <div class="card-body text-center p-3">
+                                    <i class="bi bi-piggy-bank display-6 mb-2"></i>
+                                    <h6 class="mb-1">Capacité</h6>
+                                    <h4 class="mb-0">{{ dossier.capacite_calculee|default:"0" }} €</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-primary text-white shadow">
+                                <div class="card-body text-center p-3">
+                                    <i class="bi bi-check-circle display-6 mb-2"></i>
+                                    <h6 class="mb-1">Statut</h6>
+                                    <small class="fw-bold">{{ dossier.statut_dossier }}</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section informative améliorée -->
+                    <div class="row mb-4">
+                        <div class="col-lg-8 mx-auto">
+                            <div class="alert alert-info border-0 shadow-sm">
+                                <h6 class="alert-heading">
+                                    <i class="bi bi-info-circle me-2"></i>Analyse de votre dossier
+                                </h6>
+                                {% if dossier.revenus_nets %}
+                                    <p class="mb-2">
+                                        <strong>Taux d'endettement projeté :</strong>
+                                        <span class="{% if dossier.taux_endettement > 33 %}text-danger{% elif dossier.taux_endettement > 25 %}text-warning{% else %}text-success{% endif %}">
+                                            {{ dossier.taux_endettement|floatformat:1 }}%
+                                        </span>
+                                    </p>
+                                {% endif %}
+                                
+                                {% if dossier.capacite_calculee > 0 %}
+                                <p class="mb-0">
+                                    <strong>Prochaine étape :</strong> Préparez vos documents pour un rendez-vous banque
+                                </p>
+                                {% else %}
+                                <p class="mb-0">
+                                    <strong>Prochaine étape :</strong> Complétez votre simulation de capacité d'emprunt
+                                </p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Boutons d'action -->
+                    <div class="text-center">
+                        <div class="btn-group mb-3" role="group">
+                            <a href="{% url 'export_dossier_pdf' %}" class="btn btn-primary btn-lg">
+                                <i class="bi bi-file-pdf me-2"></i>Exporter PDF
+                            </a>
+                            <a href="{% url 'simulateur_pret' %}" class="btn btn-outline-primary btn-lg">
+                                <i class="bi bi-calculator me-2"></i>Nouvelle simulation
+                            </a>
+                        </div>
+                        
+                        <div class="d-block">
+                            <a href="{% url 'accueil' %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-2"></i>Retour à l'accueil
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Section conseils -->
+                    <div class="row mt-5">
+                        <div class="col-lg-8 mx-auto">
+                            <div class="card bg-light border-0">
+                                <div class="card-body p-4">
+                                    <h6 class="card-title text-center mb-3">
+                                        <i class="bi bi-lightbulb text-warning me-2"></i>Conseils pour optimiser votre dossier
+                                    </h6>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <ul class="list-unstyled small">
+                                                <li class="mb-2"><i class="bi bi-check text-success me-2"></i>Apport minimum 10% du prix</li>
+                                                <li class="mb-2"><i class="bi bi-check text-success me-2"></i>3 derniers bulletins de salaire</li>
+                                                <li class="mb-2"><i class="bi bi-check text-success me-2"></i>Relevés bancaires 3 mois</li>
+                                            </ul>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <ul class="list-unstyled small">
+                                                <li class="mb-2"><i class="bi bi-check text-success me-2"></i>Contrat de travail</li>
+                                                <li class="mb-2"><i class="bi bi-check text-success me-2"></i>Avis d'imposition N-1</li>
+                                                <li class="mb-2"><i class="bi bi-check text-success me-2"></i>Justificatifs patrimoine</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

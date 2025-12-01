@@ -1,0 +1,161 @@
+{% extends 'analyseur/base.html' %}
+
+{% block title %}Calculateur Charges Fixes - Banque Postale{% endblock %}
+
+{% block nav_style %}background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);{% endblock %}
+
+{% block nav_title %}Calculateur Charges Fixes{% endblock %}
+
+{% block nav_buttons %}
+<a href="{% url 'accueil' %}" class="btn btn-outline-light">
+    <i class="bi bi-house"></i> Accueil
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row">
+        <div class="col-lg-10 mx-auto">
+            <div class="card shadow-lg border-0">
+                <div class="card-header text-white" style="background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);">
+                    <h2 class="mb-0 text-white">
+                        <i class="bi bi-calculator me-2"></i>
+                        Calculateur de Charges Fixes Mensuelles
+                    </h2>
+                    <p class="mb-0 mt-2 opacity-75">
+                        Upload 1 ou 2 relevés - Filtrage par mois automatique
+                    </p>
+                </div>
+                <div class="card-body p-4">
+                    {% if error %}
+                    <div class="alert alert-danger border-0 shadow-sm">
+                        <h4><i class="bi bi-exclamation-triangle"></i> Erreur d'analyse</h4>
+                        <p><strong>Détail :</strong> {{ error }}</p>
+                    </div>
+                    {% endif %}
+
+                    <div class="alert alert-success mb-4 border-0 shadow-sm">
+                        <h6><i class="bi bi-lightbulb"></i> Fonctionnement intelligent :</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <ol class="mb-0">
+                                    <li><strong>Upload flexible :</strong> 1 seul relevé OU 2 relevés consécutifs</li>
+                                    <li><strong>Détection automatique :</strong> des mois disponibles dans vos relevés</li>
+                                </ol>
+                            </div>
+                            <div class="col-md-6">
+                                <ol start="3" class="mb-0">
+                                    <li><strong>Filtrage par mois :</strong> calcul précis sur le mois de votre choix</li>
+                                    <li><strong>Sélection manuelle :</strong> prélèvements + achats CB récurrents</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+
+                    <form method="post" enctype="multipart/form-data" id="uploadForm">
+                        {% csrf_token %}
+                        <div class="row">
+                            <div class="col-md-6 mb-4">
+                                <div class="card border-success bg-success bg-opacity-10 h-100">
+                                    <div class="card-body">
+                                        <label class="form-label fw-bold text-success">
+                                            <i class="bi bi-file-earmark-pdf me-1"></i>
+                                            Relevé principal (obligatoire)
+                                        </label>
+                                        <input type="file" class="form-control form-control-lg" name="fichier_pdf1" accept=".pdf" required>
+                                        <div class="form-text">
+                                            Votre relevé Banque Postale principal
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6 mb-4">
+                                <div class="card border-secondary bg-secondary bg-opacity-10 h-100">
+                                    <div class="card-body">
+                                        <label class="form-label fw-bold text-secondary">
+                                            <i class="bi bi-file-earmark-pdf me-1"></i>
+                                            Relevé complémentaire (optionnel)
+                                        </label>
+                                        <input type="file" class="form-control form-control-lg" name="fichier_pdf2" accept=".pdf">
+                                        <div class="form-text">
+                                            Pour compléter un mois sur 2 relevés
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-center mb-4">
+                            <button type="submit" class="btn btn-success btn-lg px-5 shadow">
+                                <i class="bi bi-upload me-2"></i>Analyser et Sélectionner par Mois
+                            </button>
+                        </div>
+                    </form>
+                    
+                    <div class="mt-5">
+                        <h6 class="text-muted mb-3">Cas d'usage typiques :</h6>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="card border-primary shadow-sm">
+                                    <div class="card-body p-3 text-center">
+                                        <i class="bi bi-file-earmark-pdf text-primary display-6"></i>
+                                        <h6 class="mt-2 text-primary">1 relevé</h6>
+                                        <small class="text-muted">
+                                            Relevé du 15/07 au 15/08<br>
+                                            → Choix : Juillet ou Août
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card border-success shadow-sm">
+                                    <div class="card-body p-3 text-center">
+                                        <i class="bi bi-files text-success display-6"></i>
+                                        <h6 class="mt-2 text-success">2 relevés</h6>
+                                        <small class="text-muted">
+                                            Relevé 1: 15/07→15/08<br>
+                                            Relevé 2: 15/08→15/09<br>
+                                            → Juillet complet
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card border-warning shadow-sm">
+                                    <div class="card-body p-3 text-center">
+                                        <i class="bi bi-calendar-month text-warning display-6"></i>
+                                        <h6 class="mt-2 text-warning">Filtrage</h6>
+                                        <small class="text-muted">
+                                            Calcul précis des charges<br>
+                                            sur le mois sélectionné
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('uploadForm').addEventListener('submit', function(e) {
+    const fileInput1 = document.querySelector('input[name="fichier_pdf1"]');
+    const submitBtn = document.querySelector('button[type="submit"]');
+    
+    if (!fileInput1.files.length) {
+        e.preventDefault();
+        alert('Veuillez sélectionner au moins le fichier principal');
+        return;
+    }
+    
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Analyse en cours...';
+    submitBtn.disabled = true;
+});
+</script>
+{% endblock %}

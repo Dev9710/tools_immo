@@ -1,0 +1,505 @@
+{% extends 'analyseur/base.html' %}
+
+{% block title %}Simulateur de Prêt Immobilier{% endblock %}
+
+{% block nav_style %}background: linear-gradient(135deg, #6f42c1 0%, #5a2d91 100%);{% endblock %}
+
+{% block nav_title %}Simulateur de Prêt Immobilier{% endblock %}
+
+{% block nav_buttons %}
+<a href="{% url 'accueil' %}" class="btn btn-outline-light">
+    <i class="bi bi-house"></i> Accueil
+</a>
+{% endblock %}
+
+{% block extra_css %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row mb-4">
+        <div class="col-lg-8 mx-auto">
+            <div class="card shadow border-0">
+                <div class="card-body text-center">
+                    <h5 class="mb-3">Mode de simulation</h5>
+                    <div class="btn-group" role="group">
+                        <input type="radio" class="btn-check" name="mode" id="mode-capacite" value="capacite" checked>
+                        <label class="btn btn-outline-primary btn-lg" for="mode-capacite">
+                            <i class="bi bi-piggy-bank me-2"></i>Capacité d'emprunt
+                        </label>
+                        <input type="radio" class="btn-check" name="mode" id="mode-mensualite" value="mensualite">
+                        <label class="btn btn-outline-primary btn-lg" for="mode-mensualite">
+                            <i class="bi bi-calendar-month me-2"></i>Mensualités
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-6">
+            <!-- Formulaire capacité d'emprunt -->
+            <div class="card shadow border-0" id="form-capacite">
+                <div class="card-header text-white" style="background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);">
+                    <h5 class="mb-0">
+                        <i class="bi bi-calculator me-2"></i>Calculer ma capacité d'emprunt
+                    </h5>
+                </div>
+                <div class="card-body p-4">
+                    <form id="capaciteForm">
+                        {% csrf_token %}
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Revenus nets mensuels (€)</label>
+                                <input type="number" class="form-control form-control-lg" name="revenus_nets" min="0" step="100" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Charges mensuelles (€)</label>
+                                <input type="number" class="form-control form-control-lg" name="charges_mensuelles" min="0" step="50" value="0">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Durée (années)</label>
+                                <select class="form-select form-select-lg" name="duree">
+                                    <option value="7">7 ans</option>
+                                    <option value="10">10 ans</option>
+                                    <option value="15">15 ans</option>
+                                    <option value="20" selected>20 ans</option>
+                                    <option value="25">25 ans</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Âge</label>
+                                <input type="number" class="form-control form-control-lg" name="age" min="18" max="70" value="35">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Région</label>
+                                <select class="form-select form-select-lg" name="region">
+                                    <option value="ile_de_france">Île-de-France</option>
+                                    <option value="provence">Provence-PACA</option>
+                                    <option value="rhone_alpes">Rhône-Alpes</option>
+                                    <option value="autre" selected>Autre région</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Profil emprunteur</label>
+                                <select class="form-select form-select-lg" name="profil">
+                                    <option value="excellent">Excellent (CDI, épargne)</option>
+                                    <option value="bon">Bon (CDI stable)</option>
+                                    <option value="moyen" selected>Moyen</option>
+                                    <option value="risque">Risqué (CDD, intérim)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Apport personnel (€)</label>
+                                <input type="number" class="form-control form-control-lg" name="apport" min="0" step="1000" value="0">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Type de bien</label>
+                                <select class="form-select form-select-lg" name="type_bien">
+                                    <option value="ancien" selected>Ancien (8% frais)</option>
+                                    <option value="neuf">Neuf (3% frais)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Nombre d'adultes</label>
+                                <select class="form-select form-select-lg" name="nb_adultes">
+                                    <option value="1">1 adulte</option>
+                                    <option value="2" selected>2 adultes</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Nombre d'enfants</label>
+                                <select class="form-select form-select-lg" name="nb_enfants">
+                                    <option value="0" selected>0 enfant</option>
+                                    <option value="1">1 enfant</option>
+                                    <option value="2">2 enfants</option>
+                                    <option value="3">3 enfants</option>
+                                    <option value="4">4+ enfants</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-lg w-100 shadow">
+                            <i class="bi bi-calculator me-2"></i>Calculer ma capacité
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Formulaire mensualités -->
+            <div class="card shadow border-0 d-none" id="form-mensualite">
+                <div class="card-header text-white" style="background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);">
+                    <h5 class="mb-0">
+                        <i class="bi bi-calendar-month me-2"></i>Calculer mes mensualités
+                    </h5>
+                </div>
+                <div class="card-body p-4">
+                    <form id="mensualiteForm">
+                        {% csrf_token %}
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Montant emprunté (€)</label>
+                                <input type="number" class="form-control form-control-lg" name="montant_emprunt" min="1000" step="1000" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Durée (années)</label>
+                                <select class="form-select form-select-lg" name="duree">
+                                    <option value="7">7 ans</option>
+                                    <option value="10">10 ans</option>
+                                    <option value="15">15 ans</option>
+                                    <option value="20" selected>20 ans</option>
+                                    <option value="25">25 ans</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Taux nominal (%)</label>
+                                <input type="number" class="form-control form-control-lg" name="taux_nominal" min="0" max="10" step="0.01" value="3.50">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Taux assurance (%)</label>
+                                <input type="number" class="form-control form-control-lg" name="taux_assurance" min="0" max="2" step="0.01" value="0.25">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-success btn-lg w-100 shadow">
+                            <i class="bi bi-calculator me-2"></i>Calculer les mensualités
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <!-- Dashboard Widget -->
+            <div class="card border-primary mb-3 shadow" id="dashboard-widget">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0"><i class="bi bi-clipboard-data"></i> Mon Dossier</h6>
+                </div>
+                <div class="card-body p-3">
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <h6 class="text-muted small">Capacité</h6>
+                            <h5 class="text-success mb-0" id="capacite-display">-</h5>
+                        </div>
+                        <div class="col-6">
+                            <h6 class="text-muted small">Reste à vivre</h6>
+                            <h5 id="reste-vivre-display" class="text-info mb-0">-</h5>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <div class="alert alert-info py-2" id="statut-display">
+                            Complétez votre simulation
+                        </div>
+                        <div id="alerte-reste-vivre" class="d-none"></div>
+                    </div>
+                    <button class="btn btn-outline-primary btn-sm w-100" onclick="exporterDossier()" disabled id="export-btn">
+                        <i class="bi bi-file-pdf"></i> Exporter PDF
+                    </button>
+                </div>
+            </div>
+
+            <!-- Résultats -->
+            <div id="resultats" class="d-none">
+                <div class="card shadow border-0">
+                    <div class="card-header text-dark" style="background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);">
+                        <h5 class="mb-0">
+                            <i class="bi bi-graph-up me-2"></i>Résultats de simulation
+                        </h5>
+                    </div>
+                    <div class="card-body" id="resultats-content">
+                        <!-- Contenu dynamique -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Graphique -->
+            <div id="graphique-container" class="d-none">
+                <div class="card mt-4 shadow border-0">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0">Répartition du coût</h6>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="graphique" width="400" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Variable globale pour stocker l'instance du graphique
+let chartInstance = null;
+
+// JavaScript complet pour l'interface
+document.querySelectorAll('input[name="mode"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        if (this.value === 'capacite') {
+            document.getElementById('form-capacite').classList.remove('d-none');
+            document.getElementById('form-mensualite').classList.add('d-none');
+        } else {
+            document.getElementById('form-capacite').classList.add('d-none');
+            document.getElementById('form-mensualite').classList.remove('d-none');
+        }
+        document.getElementById('resultats').classList.add('d-none');
+        document.getElementById('graphique-container').classList.add('d-none');
+    });
+});
+
+document.getElementById('capaciteForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    await calculerSimulation(new FormData(this), 'capacite');
+});
+
+document.getElementById('mensualiteForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    await calculerSimulation(new FormData(this), 'mensualite');
+});
+
+async function calculerSimulation(formData, mode) {
+    try {
+        const data = Object.fromEntries(formData);
+        data.mode = mode;
+
+        const response = await fetch('{% url "simulateur_pret" %}', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            afficherResultats(result.data, mode);
+            mettreAJourDashboard(result.data);
+        } else {
+            alert('Erreur: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Erreur:', error);
+        alert('Erreur de calcul');
+    }
+}
+
+function mettreAJourDashboard(resultats) {
+    document.getElementById('capacite-display').textContent = 
+        new Intl.NumberFormat('fr-FR').format(resultats.capacite_emprunt || 0) + '€';
+    
+    const resteVivre = resultats.reste_a_vivre || 0;
+    const display = document.getElementById('reste-vivre-display');
+    display.textContent = new Intl.NumberFormat('fr-FR').format(resteVivre) + '€';
+    
+    const alerteContainer = document.getElementById('alerte-reste-vivre');
+    if (resultats.alerte_reste_vivre) {
+        display.className = resultats.alerte_reste_vivre.type === 'danger' ? 'text-danger mb-0' : 'text-warning mb-0';
+        alerteContainer.className = `alert alert-${resultats.alerte_reste_vivre.type} py-2`;
+        alerteContainer.innerHTML = `
+            <small><strong>${resultats.alerte_reste_vivre.message}</strong><br>
+            ${resultats.alerte_reste_vivre.conseil}</small>
+        `;
+        alerteContainer.classList.remove('d-none');
+    } else {
+        display.className = 'text-success mb-0';
+        alerteContainer.classList.add('d-none');
+    }
+    
+    document.getElementById('statut-display').textContent = resultats.statut_dossier || 'Calcul en cours';
+    document.getElementById('export-btn').disabled = false;
+}
+
+function exporterDossier() {
+    window.open('{% url "export_dossier_pdf" %}', '_blank');
+}
+
+function afficherResultats(data, mode) {
+    const container = document.getElementById('resultats-content');
+    
+    if (mode === 'capacite') {
+        container.innerHTML = `
+            <div class="row g-3">
+                <div class="col-6">
+                    <div class="card bg-success text-white shadow-sm">
+                        <div class="card-body text-center">
+                            <h5>Capacité d'emprunt</h5>
+                            <h3>${new Intl.NumberFormat('fr-FR').format(data.capacite_emprunt)} €</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card bg-info text-white shadow-sm">
+                        <div class="card-body text-center">
+                            <h5>Prix d'achat max</h5>
+                            <h3>${new Intl.NumberFormat('fr-FR').format(data.prix_achat_max)} €</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card bg-primary text-white shadow-sm">
+                        <div class="card-body text-center">
+                            <h5>Mensualité</h5>
+                            <h4>${new Intl.NumberFormat('fr-FR').format(data.mensualite_max)} €</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card bg-warning text-dark shadow-sm">
+                        <div class="card-body text-center">
+                            <h5>TAEG</h5>
+                            <h4>${data.taeg}%</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <hr>
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Taux nominal:</strong> ${data.taux_nominal}%</p>
+                    <p><strong>Taux assurance:</strong> ${data.taux_assurance}%</p>
+                    <p><strong>Apport:</strong> ${new Intl.NumberFormat('fr-FR').format(data.apport)} €</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Frais de notaire:</strong> ${new Intl.NumberFormat('fr-FR').format(data.frais_notaire)} €</p>
+                    <p><strong>Budget total:</strong> ${new Intl.NumberFormat('fr-FR').format(data.budget_total)} €</p>
+                    <p><strong>Coût des intérêts:</strong> ${new Intl.NumberFormat('fr-FR').format(data.cout_interets)} €</p>
+                </div>
+            </div>
+        `;
+        
+        creerGraphiqueCapacite(data);
+    } else {
+        container.innerHTML = `
+            <div class="row g-3">
+                <div class="col-6">
+                    <div class="card bg-success text-white shadow-sm">
+                        <div class="card-body text-center">
+                            <h5>Mensualité</h5>
+                            <h3>${new Intl.NumberFormat('fr-FR').format(data.mensualite)} €</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card bg-warning text-dark shadow-sm">
+                        <div class="card-body text-center">
+                            <h5>TAEG</h5>
+                            <h3>${data.taeg}%</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="card bg-info text-white shadow-sm">
+                        <div class="card-body text-center">
+                            <h5>Coût total du crédit</h5>
+                            <h3>${new Intl.NumberFormat('fr-FR').format(data.cout_total)} €</h3>
+                            <small>dont ${new Intl.NumberFormat('fr-FR').format(data.cout_interets)} € d'intérêts</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        if (data.tableau_amortissement) {
+            container.innerHTML += `
+                <hr>
+                <h6>Tableau d'amortissement (12 premiers mois)</h6>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Mois</th>
+                                <th>Mensualité</th>
+                                <th>Capital</th>
+                                <th>Intérêts</th>
+                                <th>Capital restant</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.tableau_amortissement.map(ligne => `
+                                <tr>
+                                    <td>${ligne.mois}</td>
+                                    <td>${new Intl.NumberFormat('fr-FR').format(ligne.mensualite)} €</td>
+                                    <td>${new Intl.NumberFormat('fr-FR').format(ligne.capital)} €</td>
+                                    <td>${new Intl.NumberFormat('fr-FR').format(ligne.interets)} €</td>
+                                    <td>${new Intl.NumberFormat('fr-FR').format(ligne.capital_restant)} €</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+        
+        creerGraphiqueMensualite(data);
+    }
+    
+    document.getElementById('resultats').classList.remove('d-none');
+    document.getElementById('graphique-container').classList.remove('d-none');
+}
+
+function creerGraphiqueCapacite(data) {
+    if (chartInstance) {
+        chartInstance.destroy();
+        chartInstance = null;
+    }
+    
+    const ctx = document.getElementById('graphique').getContext('2d');
+    chartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Capital emprunté', 'Intérêts', 'Apport', 'Frais de notaire'],
+            datasets: [{
+                data: [data.capacite_emprunt, data.cout_interets, data.apport, data.frais_notaire],
+                backgroundColor: ['#28a745', '#dc3545', '#007bff', '#ffc107']
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom' }
+            }
+        }
+    });
+}
+
+function creerGraphiqueMensualite(data) {
+    if (chartInstance) {
+        chartInstance.destroy();
+        chartInstance = null;
+    }
+    
+    const ctx = document.getElementById('graphique').getContext('2d');
+    const montantEmprunte = data.cout_total - data.cout_interets;
+    
+    chartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Capital emprunté', 'Intérêts'],
+            datasets: [{
+                data: [montantEmprunte, data.cout_interets],
+                backgroundColor: ['#28a745', '#dc3545']
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom' }
+            }
+        }
+    });
+}
+</script>
+{% endblock %}
