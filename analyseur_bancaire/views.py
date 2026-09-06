@@ -335,145 +335,244 @@ class BanquePostaleParserSimple:
         libelle = re.sub(r'\s+', ' ', libelle).strip()
         return libelle[:60]
 
-    def parse_operations_section(self, text_section, year=None):
-        """Parse une section d'opérations bancaires avec correction des collisions date/montant"""
-        operations = []
-        lines = text_section.split('\n')
+    # Montant au format d'un mot isolé (« 17,00 », « 3360,00 », « 1 234,56 »).
+    AMOUNT_RE = re.compile(r'^\d{1,3}(?:[ .]?\d{3})*,\d{2}$')
+    _OPERATIONS_MARKER = re.compile(
+        r'(?:Vos\s+op[eé]rations|OP[EÉ]RATIONS)', re.IGNORECASE)
 
+    def extract_year(self, text):
+        """Année du relevé : d'abord une vraie date jj/mm/20aa (fiable), sinon
+        « Relevé … 20aa » (tolérant à l'accent), sinon l'année courante. Bornée
+        à 20xx pour ne pas capturer un numéro de compte ou d'agence."""
+        date_year = re.search(r'\b\d{2}/\d{2}/(20\d{2})\b', text)
+        if date_year:
+            return int(date_year.group(1))
+        releve_year = re.search(r'Relev[eé].*?(20\d{2})', text)
+        return int(releve_year.group(1)) if releve_year else datetime.now().year
+
+    def extract_word_lines(self, pdf_path):
+        """Reconstruit les lignes du relevé à partir des mots *positionnés* et
+        détecte la frontière horizontale entre les colonnes Débit et Crédit.
+
+        Chaque ligne renvoyée est un dict {'text', 'amounts'} où `amounts` liste
+        les (valeur, x1) des montants de la ligne. Le sens d'une opération se lit
+        ainsi à la position du montant, et non plus par mots-clés — ce qui évite
+        de compter un crédit comme une charge. Renvoie (None, None) si pdfplumber
+        est absent : on retombe alors sur le texte brut, sans notion de sens."""
+        try:
+            import pdfplumber
+        except ImportError:
+            return None, None
+
+        lines = []
+        debit_right = credit_right = None
+        with pdfplumber.open(pdf_path) as pdf:
+            for page in pdf.pages:
+                words = page.extract_words()
+                for w in words:
+                    t = w['text'].lower()
+                    if debit_right is None and t.startswith(('débit', 'debit')):
+                        debit_right = w['x1']
+                    if credit_right is None and t.startswith(('crédit', 'credit')):
+                        credit_right = w['x1']
+                # Regrouper les mots en lignes visuelles (tolérance verticale).
+                clusters = []
+                for w in sorted(words, key=lambda w: w['top']):
+                    if clusters and abs(w['top'] - clusters[-1]['top']) <= 3:
+                        clusters[-1]['words'].append(w)
+                    else:
+                        clusters.append({'top': w['top'], 'words': [w]})
+                for cl in clusters:
+                    toks = sorted(cl['words'], key=lambda w: w['x0'])
+                    lines.append({
+                        'text': ' '.join(w['text'] for w in toks),
+                        'amounts': [(w['text'], w['x1'])
+                                    for w in toks if self.AMOUNT_RE.match(w['text'])],
+                    })
+
+        # Frontière Débit/Crédit : milieu des deux bords droits d'en-tête, avec
+        # des valeurs de repli observées sur les relevés Banque Postale.
+        if debit_right and credit_right:
+            seuil = (debit_right + credit_right) / 2
+        elif credit_right:
+            seuil = credit_right - 20
+        else:
+            seuil = 503.0
+        return lines, seuil
+
+    def _clean_description(self, description):
+        """Nettoie une description : retire les dates parasites, recolle les
+        libellés agglutinés et normalise les espaces."""
+        description = re.sub(
+            r'\d{2}[./]\d{2}[./](?:20)?\d{2}', '', description)
+        description = description.replace("ACHATCB", "ACHAT CB ")
+        description = re.sub(r'IMMOBILIERE(\d+)', r'IMMOBILIERE \1', description)
+        return re.sub(r'\s+', ' ', description).strip()
+
+    def parse_operations_lines(self, lines, seuil, year):
+        """Parse les lignes positionnées ; le sens (débit/crédit) vient de la
+        colonne dans laquelle tombe le montant."""
+        operations = []
         i = 0
         while i < len(lines):
-            line = lines[i].strip()
+            text = lines[i]['text'].strip()
 
-            # Ignorer les en-têtes et lignes vides
-            if not line or any(word in line for word in ['Date', 'Operation', 'Debit', 'Credit', 'Ancien solde', 'Nouveau solde']):
+            if not text or any(w in text for w in
+                               ['Ancien solde', 'Nouveau solde', 'Solde', 'Débit', 'Crédit']):
                 i += 1
                 continue
 
-            # Chercher une opération (date + description)
+            date_match = re.match(r'^(\d{2}/\d{2})\s+(.+)', text)
+            if not date_match:
+                i += 1
+                continue
+
+            full_date = f"{date_match.group(1)}/{year or datetime.now().year}"
+            try:
+                date_operation = datetime.strptime(full_date, '%d/%m/%Y').date()
+            except ValueError:
+                i += 1
+                continue
+
+            description = date_match.group(2)
+            amounts = lines[i]['amounts']
+
+            # Montant absent de la ligne de date : chercher sur les suivantes,
+            # jusqu'à la prochaine opération, en agrégeant la description.
+            j = i
+            while not amounts and j + 1 < len(lines):
+                nxt = lines[j + 1]
+                if re.match(r'^\d{2}/\d{2}\s+', nxt['text'].strip()):
+                    break
+                if nxt['amounts']:
+                    amounts = nxt['amounts']
+                    break
+                if not any(s in nxt['text'] for s in
+                           ['CARTE NUMERO', 'REF :', 'IDENT :', 'MANDAT :']):
+                    description += ' ' + nxt['text']
+                j += 1
+
+            if not amounts:
+                i += 1
+                continue
+
+            # Une ligne d'opération porte un seul montant ; s'il y en a plusieurs
+            # on prend le plus à droite (colonne des montants).
+            value_str, x1 = max(amounts, key=lambda a: a[1])
+            montant = self.parse_montant(value_str)
+            sens = 'credit' if x1 > seuil else 'debit'
+
+            description = self._clean_description(
+                description.replace(value_str, ' '))
+
+            if montant > Decimal('0'):
+                operations.append({
+                    'date': date_operation,
+                    'description': description,
+                    'montant': montant,
+                    'sens': sens,
+                    'type': self.categorize_operation(description),
+                    'libelle': self.extract_libelle(description),
+                })
+            i += 1
+
+        return operations
+
+    def parse_operations_section(self, text_section, year=None):
+        """Repli texte (sans position) : on ne connaît pas le sens débit/crédit,
+        il reste à None. Utilisé seulement si pdfplumber est indisponible."""
+        operations = []
+        lines = text_section.split('\n')
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            if not line or any(word in line for word in
+                               ['Date', 'Operation', 'Debit', 'Credit',
+                                'Ancien solde', 'Nouveau solde']):
+                i += 1
+                continue
+
             date_match = re.match(r'^(\d{2}/\d{2})\s+(.+)', line)
+            if not date_match:
+                i += 1
+                continue
 
-            if date_match:
-                date_str = date_match.group(1)
-                description = date_match.group(2).strip()
+            full_date = f"{date_match.group(1)}/{year or datetime.now().year}"
+            try:
+                date_operation = datetime.strptime(full_date, '%d/%m/%Y').date()
+            except ValueError:
+                i += 1
+                continue
 
-                # Ajouter l'année si absente
-                if not year:
-                    year = datetime.now().year
-                full_date = f"{date_str}/{year}"
+            description = self._clean_description(date_match.group(2))
+            montant = Decimal('0')
+            montant_matches = list(re.finditer(
+                r'(\d{1,3}(?:\s\d{3})*,\d{2})', description))
+            if montant_matches:
+                last_match = montant_matches[-1]
+                montant = self.parse_montant(last_match.group(1))
+                description = (description[:last_match.start()]
+                               + description[last_match.end():]).strip()
+            else:
+                j = i + 1
+                while j < min(i + 4, len(lines)):
+                    next_line = lines[j].strip()
+                    if re.match(r'^\d{2}/\d{2}\s+', next_line):
+                        break
+                    if re.match(r'^\d{1,3}(?:\s\d{3})*,\d{2}$', next_line):
+                        montant = self.parse_montant(next_line)
+                        break
+                    if next_line and not any(skip in next_line for skip in
+                                             ['CARTE NUMERO', 'REF :', 'IDENT :', 'MANDAT :']):
+                        description += ' ' + next_line
+                    j += 1
 
-                try:
-                    date_operation = datetime.strptime(
-                        full_date, '%d/%m/%Y').date()
-                except ValueError:
-                    i += 1
-                    continue
-
-                # Supprimer les dates de la description pour nettoyer
-                description = re.sub(
-                    r'\d{2}[./]\d{2}[./](?:20)?\d{2}', '', description)
-                description = re.sub(r'\d{2}/\d{2}/2\b', '', description)
-
-                # Nettoyer les libellés collés
-                description = description.replace("ACHATCB", "ACHAT CB ")
-                description = re.sub(r'IMMOBILIERE(\d+)',
-                                     r'IMMOBILIERE \1', description)
-
-                # Nettoyer les espaces multiples
-                description = re.sub(r'\s+', ' ', description).strip()
-
-                # PARSING DES MONTANTS (format français : « 1 234,56 »,
-                # séparateur de milliers = espace). Les dates/années ont déjà
-                # été retirées de la description plus haut, et ce motif ne peut
-                # pas capturer une année à 4 chiffres en tête : inutile (et
-                # dangereux) de « deviner » une année collée — cela écrasait
-                # les vrais montants de 19 000 à 29 999,99 €.
-                montant = Decimal('0')
-
-                montant_matches = list(re.finditer(
-                    r'(\d{1,3}(?:\s\d{3})*,\d{2})', description))
-
-                if montant_matches:
-                    # Prendre le dernier montant trouvé (la valeur de l'opération)
-                    last_match = montant_matches[-1]
-                    montant = self.parse_montant(last_match.group(1))
-
-                    # Retirer le montant de la description
-                    description = (description[:last_match.start()]
-                                   + description[last_match.end():]).strip()
-                else:
-                    # Le montant peut être sur une ligne suivante
-                    j = i + 1
-                    while j < min(i + 4, len(lines)):
-                        next_line = lines[j].strip()
-                        if re.match(r'^\d{2}/\d{2}\s+', next_line):
-                            break
-                        if re.match(r'^\d{1,3}(?:\s\d{3})*,\d{2}$', next_line):
-                            montant = self.parse_montant(next_line)
-                            break
-                        if next_line and not any(skip in next_line for skip in ['CARTE NUMERO', 'REF :', 'IDENT :', 'MANDAT :']):
-                            description += ' ' + next_line
-                        j += 1
-
-                # Créer l'opération seulement si un montant valide a été trouvé
-                if montant > Decimal('0'):
-                    type_op = self.categorize_operation(description)
-                    operations.append({
-                        'date': date_operation,
-                        'description': description,
-                        'montant': montant,
-                        'type': type_op,
-                        'libelle': self.extract_libelle(description)
-                    })
-
+            if montant > Decimal('0'):
+                operations.append({
+                    'date': date_operation,
+                    'description': description,
+                    'montant': montant,
+                    'sens': None,
+                    'type': self.categorize_operation(description),
+                    'libelle': self.extract_libelle(description),
+                })
             i += 1
 
         return operations
 
     def parse_pdf(self, pdf_path, types_selectionnes):
-        """Parse complet du PDF Banque Postale"""
+        """Parse complet du PDF Banque Postale (géométrie des colonnes en
+        priorité, texte brut en repli)."""
         try:
-            text = self.extract_text_from_pdf(pdf_path)
+            lines, seuil = self.extract_word_lines(pdf_path)
 
-            if not text or len(text) < 50:
-                return {'success': False, 'error': 'PDF vide ou illisible'}
-
-            markers = [
-                r'Vos\s+op[eé]rations',
-                r'Vos\s+op[eé]rations\s+CCP',
-                r'Vos\s+op[eé]rations\s+Compte',
-                r'OP[EÉ]RATIONS',
-            ]
-
-            found = None
-            for m in markers:
-                if re.search(m, text, re.IGNORECASE):
-                    found = m
-                    break
-
-            if not found:
-                return {'success': False, 'error': 'Section "Vos opérations" non trouvée'}
-
-            # Extraire l'année du relevé : d'abord une vraie date jj/mm/20aa
-            # (fiable), sinon « Relevé … 20aa » (tolérant à l'accent), sinon
-            # l'année courante. On borne à 20xx pour éviter de capturer un
-            # numéro de compte ou d'agence.
-            date_year = re.search(r'\b\d{2}/\d{2}/(20\d{2})\b', text)
-            if date_year:
-                year = int(date_year.group(1))
+            if lines is not None:
+                full_text = '\n'.join(l['text'] for l in lines)
+                if len(full_text) < 50:
+                    return {'success': False, 'error': 'PDF vide ou illisible'}
+                start = next((idx for idx, l in enumerate(lines)
+                             if self._OPERATIONS_MARKER.search(l['text'])), None)
+                if start is None:
+                    return {'success': False, 'error': 'Section "Vos opérations" non trouvée'}
+                year = self.extract_year(full_text)
+                all_operations = self.parse_operations_lines(
+                    lines[start + 1:], seuil, year)
             else:
-                releve_year = re.search(r'Relev[eé].*?(20\d{2})', text)
-                year = int(releve_year.group(1)
-                           ) if releve_year else datetime.now().year
+                text = self.extract_text_from_pdf(pdf_path)
+                if not text or len(text) < 50:
+                    return {'success': False, 'error': 'PDF vide ou illisible'}
+                if not self._OPERATIONS_MARKER.search(text):
+                    return {'success': False, 'error': 'Section "Vos opérations" non trouvée'}
+                year = self.extract_year(text)
+                sections = self._OPERATIONS_MARKER.split(text)
+                all_operations = []
+                for section in sections[1:]:
+                    all_operations.extend(
+                        self.parse_operations_section(section, year))
 
-            # Découper en sections
-            sections = re.split(found, text, flags=re.IGNORECASE)
-
-            all_operations = []
-            for section in sections[1:]:
-                all_operations.extend(
-                    self.parse_operations_section(section, year))
-
-            # Grouper par type
+            # Grouper par type ; en charges fixes on ne veut que les sorties :
+            # un crédit (sens détecté par la colonne) est exclu même si un
+            # mot-clé le rangeait par erreur dans « debit »/« achat ».
             operations_par_type = {k: [] for k in self.keywords.keys()}
             for op in all_operations:
                 if op['type'] in types_selectionnes:
@@ -481,7 +580,8 @@ class BanquePostaleParserSimple:
                         'date': op['date'],
                         'libelle': op['libelle'],
                         'description': op['description'],
-                        'montant': op['montant']
+                        'montant': op['montant'],
+                        'sens': op.get('sens'),
                     })
 
             return {
@@ -598,11 +698,11 @@ def create_excel_multi_onglets(operations_par_type, types_traites):
             cell.alignment = Alignment(horizontal="right")
             cell.number_format = '#,##0.00'
 
-            # Couleur selon le signe
-            if operation['montant'] < 0:
-                cell.font = Font(color="DC3545")  # Rouge pour les débits
-            else:
+            # Couleur selon le sens (colonne Débit/Crédit du relevé)
+            if operation.get('sens') == 'credit':
                 cell.font = Font(color="28A745")  # Vert pour les crédits
+            else:
+                cell.font = Font(color="DC3545")  # Rouge pour les débits
 
             total += abs(operation['montant'])  # Somme en valeur absolue
             row += 1
@@ -952,11 +1052,12 @@ def charges_fixes(request):
                         raise Exception(
                             f"Erreur de parsing sur {fichier_pdf.name}: {resultats['error']}")
 
-                    # Agréger les opérations
-                    prelevements = resultats['operations_par_type'].get(
-                        'debit', [])
-                    achats_cb = resultats['operations_par_type'].get(
-                        'achat', [])
+                    # Agréger les opérations (sorties uniquement : on écarte un
+                    # crédit qui aurait été rangé par mot-clé dans debit/achat).
+                    prelevements = [op for op in resultats['operations_par_type'].get('debit', [])
+                                    if op.get('sens') != 'credit']
+                    achats_cb = [op for op in resultats['operations_par_type'].get('achat', [])
+                                 if op.get('sens') != 'credit']
 
                     all_prelevements.extend(prelevements)
                     all_achats_cb.extend(achats_cb)
