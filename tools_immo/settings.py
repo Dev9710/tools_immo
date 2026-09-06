@@ -25,12 +25,11 @@ ALLOWED_HOSTS = os.environ.get(
     'DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver').split(',')
 
 
-# Application definition
+# Application definition. L'appli ne persiste rien et n'a ni comptes ni admin :
+# les apps intégrées auth/contenttypes/sessions (qui exigeraient des migrations
+# et une base) sont retirées. Les sessions passent par des cookies signés, donc
+# SessionMiddleware suffit sans l'app « sessions ».
 INSTALLED_APPS = [
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
     'django.contrib.staticfiles',
     'analyseur_bancaire',
 ]
@@ -40,8 +39,6 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
@@ -56,8 +53,6 @@ TEMPLATES = [
             'context_processors': [
                 'django.template.context_processors.debug',
                 'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
             ],
         },
     },
@@ -78,7 +73,6 @@ DATABASES = {
 }
 
 SESSION_ENGINE = 'django.contrib.sessions.backends.signed_cookies'
-MESSAGE_STORAGE = 'django.contrib.messages.storage.cookie.CookieStorage'
 
 
 # Internationalisation
