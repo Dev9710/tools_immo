@@ -25,7 +25,7 @@ def nombre(v):
         return None
     if isinstance(v, (int, float)):
         return float(v)
-    s = str(v).replace(" ", " ").replace("\xa0", " ")
+    s = str(v).replace("\N{NARROW NO-BREAK SPACE}", " ").replace("\N{NO-BREAK SPACE}", " ")
     s = re.sub(r"(?<=\d)[ .](?=\d{3}\b)", "", s)      # séparateurs de milliers
     m = re.search(r"\d+(?:[.,]\d+)?", s)
     return float(m.group().replace(",", ".")) if m else None

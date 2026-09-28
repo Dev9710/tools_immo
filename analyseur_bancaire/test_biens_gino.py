@@ -20,8 +20,7 @@ def ville(dossier, fichiers, stan=None):
 class LectureNombresTests(SimpleTestCase):
     def test_formats_reels_de_gino(self):
         self.assertEqual(bg.nombre("254 000 €"), 254000.0)
-        self.assertEqual(bg.nombre("254 000\xa0€"), 254000.0)
-        self.assertEqual(bg.nombre("254 000 €"), 254000.0)  # narrow no-break space U+202F
+        self.assertEqual(bg.nombre("254\N{NARROW NO-BREAK SPACE}000\N{NO-BREAK SPACE}€"), 254000.0)
         self.assertEqual(bg.nombre("104,23 m²"), 104.23)
         self.assertEqual(bg.nombre("104.85 m²"), 104.85)
         self.assertEqual(bg.nombre("Entre 222 m² et 245 m²"), 222.0)
