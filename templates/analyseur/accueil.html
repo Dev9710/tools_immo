@@ -2,6 +2,80 @@
 
 {% block title %}Accueil - Suite Immobilière{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* Carte « depenses mensuelles » : la metrique porte la carte, l'icone est
+       secondaire. Repris du langage visuel des cartes de synthese financiere. */
+    .ac-card {
+        background: #fff;
+        border: 1px solid rgba(15, 23, 42, .07);
+        border-radius: 20px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 14px 34px -20px rgba(15, 23, 42, .45);
+        transition: transform .25s ease, box-shadow .25s ease;
+    }
+    .ac-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 22px 46px -22px rgba(15, 23, 42, .5);
+    }
+    .ac-eyebrow {
+        font-size: .72rem;
+        font-weight: 700;
+        letter-spacing: .09em;
+        text-transform: uppercase;
+        color: #64748b;
+    }
+    .ac-icon {
+        width: 40px; height: 40px; border-radius: 12px;
+        background: #eef3ff; color: #2549b5;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 1.15rem;
+    }
+    .ac-metric {
+        font-size: 2.9rem;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: -.03em;
+        color: #0f172a;
+        font-variant-numeric: tabular-nums;
+    }
+    .ac-metric small { font-size: 1.05rem; font-weight: 600; color: #64748b; letter-spacing: 0; }
+    /* Etat vide : pas de chiffre a montrer, donc la promesse prend sa place. */
+    .ac-question {
+        font-size: 1.7rem;
+        font-weight: 700;
+        line-height: 1.15;
+        letter-spacing: -.02em;
+        color: #0f172a;
+    }
+    .ac-metric-note { font-size: .875rem; color: #64748b; margin-top: .75rem; }
+    .ac-list { list-style: none; padding: 0; margin: 0; }
+    .ac-list li {
+        display: flex; align-items: center; gap: .55rem;
+        font-size: .93rem; color: #334155;
+        padding: .3rem 0;
+    }
+    .ac-list i { color: #16a34a; font-size: 1rem; flex: 0 0 auto; }
+    .ac-action {
+        display: block;
+        background: #f1f5f9;
+        border-radius: 14px;
+        padding: .95rem 1.1rem;
+        text-decoration: none;
+        color: inherit;
+        transition: background .2s ease, box-shadow .2s ease;
+    }
+    .ac-action:hover { background: #e7edf5; color: inherit; box-shadow: 0 10px 24px -16px rgba(15, 23, 42, .55); }
+    .ac-pill {
+        width: 38px; height: 38px; border-radius: 999px;
+        background: #fff; color: #475569;
+        display: inline-flex; align-items: center; justify-content: center;
+        transition: transform .2s ease;
+        flex: 0 0 auto;
+    }
+    .ac-action:hover .ac-pill { transform: scale(1.12); }
+</style>
+{% endblock %}
+
 {% block content %}
 <section class="hero-section py-5">
     <div class="container text-center">
@@ -25,31 +99,41 @@
 <section class="py-5 bg-light">
     <div class="container">
         <div class="row g-4 justify-content-center">
-            <!-- Card 1: Analyse Standard -->
+            <!-- Card 1: Depenses mensuelles (carte principale) -->
             <div class="col-lg-4">
-                <div class="card h-100 shadow-lg border-0 card-hover">
-                    <div class="card-header text-white text-center py-4" style="background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);">
-                        <i class="bi bi-file-earmark-spreadsheet display-4 mb-3"></i>
-                        <h4 class="mb-0">Analyse des Relevés</h4>
+                <div class="ac-card h-100 d-flex flex-column p-4">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <span class="ac-eyebrow">Étape 1 · Vos dépenses</span>
+                        <span class="ac-icon"><i class="bi bi-wallet2"></i></span>
                     </div>
-                    <div class="card-body p-4">
-                        <h5 class="card-title text-center mb-4">Classification par type d'opération</h5>
-                        <ul class="list-unstyled">
-                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Achats CB</li>
-                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Prélèvements</li>
-                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Virements</li>
-                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Chèques</li>
-                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Dépôts</li>
-                        </ul>
-                        <div class="alert alert-info">
-                            <small><strong>Idéal pour :</strong> Vue d'ensemble organisée par catégories</small>
+
+                    {% if depenses_mensuelles %}
+                        <div class="ac-metric">{{ depenses_affichees }} <small>€ / mois</small></div>
+                        <p class="ac-metric-note mb-4">
+                            <i class="bi bi-check-circle-fill text-success me-1"></i>Votre moyenne, reprise dans le simulateur.
+                        </p>
+                    {% else %}
+                        <div class="ac-question">Combien je dépense<br>chaque&nbsp;mois&nbsp;?</div>
+                        <p class="ac-metric-note mb-4">Vos relevés répondent à la question, poste par poste.</p>
+                    {% endif %}
+
+                    <ul class="ac-list mb-4">
+                        <li><i class="bi bi-check-circle"></i>Tout ce qui sort du compte</li>
+                        <li><i class="bi bi-check-circle"></i>Courses, essence, quotidien</li>
+                        <li><i class="bi bi-check-circle"></i>Prélèvements et chèques</li>
+                        <li><i class="bi bi-check-circle"></i>Moyenne et tendance</li>
+                        <li><i class="bi bi-check-circle"></i>Report vers le simulateur</li>
+                    </ul>
+
+                    <a href="{% url 'depenses_mensuelles' %}" class="ac-action mt-auto">
+                        <div class="d-flex align-items-center justify-content-between gap-3">
+                            <div>
+                                <div class="fw-semibold">{% if depenses_mensuelles %}Recalculer{% else %}Analyser mes relevés{% endif %}</div>
+                                <div class="small text-muted">Déposez 1 à 3 PDF, c'est tout</div>
+                            </div>
+                            <span class="ac-pill"><i class="bi bi-arrow-up-right"></i></span>
                         </div>
-                    </div>
-                    <div class="card-footer bg-transparent text-center p-4">
-                        <a href="{% url 'upload_releve' %}" class="btn btn-primary btn-lg px-4">
-                            <i class="bi bi-file-earmark-pdf me-2"></i>Analyser PDF
-                        </a>
-                    </div>
+                    </a>
                 </div>
             </div>
 
@@ -120,13 +204,13 @@
                         </h5>
                         <p class="mb-3">
                             <strong>Workflow optimal :</strong> 
-                            Analysez vos relevés → Calculez vos charges fixes → Simulez votre capacité d'emprunt
+                            Mesurez vos dépenses → Isolez vos charges fixes → Simulez votre capacité d'emprunt
                         </p>
                         <div class="row g-3">
                             <div class="col-md-4">
                                 <div class="d-flex align-items-center justify-content-center">
                                     <i class="bi bi-1-circle-fill text-primary me-2 fs-4"></i>
-                                    <span class="small">Analyse PDF automatique</span>
+                                    <span class="small">Dépenses mensuelles</span>
                                 </div>
                             </div>
                             <div class="col-md-4">

@@ -1,0 +1,925 @@
+{% extends 'analyseur/base.html' %}
+
+{% block title %}Mes dépenses mensuelles{% endblock %}
+{% block nav_title %}Mes dépenses mensuelles{% endblock %}
+
+{% block extra_css %}
+<style>
+    .dm-shell { background: #f4f5f7; }
+    .dm-card {
+        background: #fff;
+        border: 1px solid rgba(15, 23, 42, .07);
+        border-radius: 20px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 12px 32px -18px rgba(15, 23, 42, .35);
+    }
+    .dm-label {
+        font-size: .8rem;
+        font-weight: 600;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: #64748b;
+    }
+    .dm-metric {
+        font-size: clamp(2.75rem, 7vw, 4.25rem);
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: -.03em;
+        color: #0f172a;
+        font-variant-numeric: tabular-nums;
+    }
+    .dm-metric small { font-size: 1.5rem; font-weight: 600; color: #64748b; }
+
+    .dm-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: .4rem;
+        padding: .35rem .8rem;
+        border-radius: 999px;
+        font-size: .85rem;
+        font-weight: 600;
+    }
+    .dm-badge-hausse { background: #fef2f2; color: #b91c1c; }
+    .dm-badge-baisse { background: #f0fdf4; color: #15803d; }
+    .dm-badge-stable { background: #eff6ff; color: #1d4ed8; }
+
+    /* Bloc secondaire : fond neutre, pastille fléchée, léger relief au survol */
+    .dm-subcard {
+        background: #f1f5f9;
+        border-radius: 14px;
+        padding: 1rem 1.15rem;
+        text-decoration: none;
+        color: inherit;
+        display: block;
+        transition: background .2s ease, transform .2s ease, box-shadow .2s ease;
+    }
+    .dm-subcard:hover {
+        background: #e7edf5;
+        transform: translateY(-2px);
+        box-shadow: 0 10px 24px -14px rgba(15, 23, 42, .5);
+        color: inherit;
+    }
+    .dm-pill {
+        width: 40px; height: 40px;
+        border-radius: 999px;
+        background: #fff;
+        display: flex; align-items: center; justify-content: center;
+        transition: transform .2s ease;
+        flex: 0 0 auto;
+    }
+    .dm-subcard:hover .dm-pill { transform: scale(1.1); }
+
+    /* Graphique en barres, pur CSS : pas de dépendance JS pour trois barres */
+    .dm-chart { display: flex; align-items: flex-end; gap: 14px; height: 190px; }
+    .dm-bar-wrap { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; }
+    /* Bornée, sinon deux relevés donnent deux pavés au lieu d'un graphique. */
+    .dm-bar-wrap > .dm-bar { width: 100%; max-width: 130px; margin: 0 auto; }
+    .dm-bar {
+        border-radius: 10px 10px 4px 4px;
+        background: linear-gradient(180deg, #3b6fe0 0%, #2549b5 100%);
+        min-height: 6px;
+        transition: filter .2s ease;
+    }
+    .dm-bar:hover { filter: brightness(1.12); }
+    .dm-bar-partiel {
+        background: repeating-linear-gradient(135deg, #cbd5e1 0 7px, #e2e8f0 7px 14px);
+    }
+    .dm-bar-value { font-size: .95rem; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; }
+    .dm-bar-name { font-size: .8rem; color: #64748b; }
+
+    .dm-cat-track { height: 8px; background: #eef2f7; border-radius: 999px; overflow: hidden; }
+    .dm-cat-fill { height: 100%; border-radius: 999px; background: #3b6fe0; }
+    .dm-cat-fill.c1 { background: #2549b5; }
+    .dm-cat-fill.c2 { background: #3b6fe0; }
+    .dm-cat-fill.c3 { background: #7aa0f0; }
+    .dm-cat-fill.c4 { background: #b6cbf7; }
+
+    .dm-dropzone {
+        border: 2px dashed #c3ccdb;
+        border-radius: 16px;
+        background: #fbfcfe;
+        padding: 2.25rem 1.5rem;
+        text-align: center;
+        transition: border-color .2s ease, background .2s ease;
+        cursor: pointer;
+    }
+    .dm-dropzone:hover, .dm-dropzone.is-over { border-color: #3b6fe0; background: #f2f6ff; }
+    /* L'input reste focusable au clavier (d-none le sortirait de l'ordre de
+       tabulation) : on le masque visuellement, et c'est la dropzone qui porte
+       l'indicateur de focus. */
+    .dm-dropzone input[type="file"] {
+        position: absolute;
+        width: 1px; height: 1px;
+        opacity: 0;
+        pointer-events: none;
+    }
+    .dm-dropzone:focus-within {
+        border-color: #2549b5;
+        background: #f2f6ff;
+        outline: 3px solid rgba(59, 111, 224, .35);
+        outline-offset: 2px;
+    }
+    .dm-step-num {
+        width: 30px; height: 30px; border-radius: 999px;
+        background: #0f172a; color: #fff;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: .85rem; font-weight: 700; flex: 0 0 auto;
+    }
+    .dm-num { font-variant-numeric: tabular-nums; }
+
+    /* --- Indicateurs clés --------------------------------------------- */
+    .dm-kpi {
+        background: #f8fafc;
+        border: 1px solid rgba(15, 23, 42, .07);
+        border-radius: 14px;
+        padding: 1rem 1.1rem;
+        height: 100%;
+    }
+    .dm-kpi-in { background: #f0fdf4; border-color: rgba(22, 163, 74, .18); }
+    .dm-kpi-out { background: #fef6f6; border-color: rgba(185, 28, 28, .14); }
+    .dm-kpi-label {
+        font-size: .72rem; font-weight: 700; letter-spacing: .08em;
+        text-transform: uppercase; color: #64748b;
+    }
+    .dm-kpi-value {
+        font-size: 1.85rem; font-weight: 700; line-height: 1.1;
+        letter-spacing: -.02em; color: #0f172a;
+        font-variant-numeric: tabular-nums; margin-top: .25rem;
+    }
+    .dm-kpi-unit { font-size: .78rem; color: #64748b; margin-top: .15rem; }
+    .dm-corrige {
+        background: #eff6ff; border: 1px solid rgba(37, 73, 181, .18);
+        border-radius: 12px; padding: .75rem 1rem;
+        font-size: .875rem; color: #1e3a8a;
+    }
+    .dm-corrige span { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+    /* --- Graphique apparié entrées / sorties -------------------------- */
+    .dm-legende { display: flex; gap: 1.25rem; font-size: .82rem; color: #475569; }
+    .dm-legende span { display: inline-flex; align-items: center; gap: .4rem; }
+    .dm-puce { width: 12px; height: 12px; border-radius: 4px; display: inline-block; }
+    .dm-puce-in { background: #16a34a; }
+    .dm-puce-out { background: #2549b5; }
+    .dm-paire { display: flex; gap: 6px; align-items: flex-end; height: 100%;
+                justify-content: center; }
+    .dm-col { display: flex; flex-direction: column; justify-content: flex-end;
+              height: 100%; width: 100%; max-width: 62px; }
+    .dm-bar-in { background: linear-gradient(180deg, #22c55e 0%, #15803d 100%); }
+    .dm-bar-out { background: linear-gradient(180deg, #3b6fe0 0%, #2549b5 100%); }
+    .dm-bar-value { font-size: .72rem; font-weight: 700; color: #0f172a;
+                    font-variant-numeric: tabular-nums; text-align: center;
+                    margin-bottom: .25rem; }
+
+    /* --- Tags et tableaux --------------------------------------------- */
+    .dm-tag {
+        font-size: .72rem; font-weight: 700; padding: .15rem .5rem;
+        border-radius: 999px; text-transform: uppercase; letter-spacing: .04em;
+    }
+    .dm-tag-in { background: #dcfce7; color: #15803d; }
+    .dm-tag-out { background: #e7edf5; color: #2549b5; }
+    .dm-cat-in { background: #16a34a !important; }
+    /* Un mois chargé dépasse la centaine de lignes : on plafonne la hauteur
+       pour que l'accordéon reste manipulable. */
+    .dm-ops { max-height: 460px; overflow-y: auto; }
+    .dm-ops thead th {
+        position: sticky; top: 0; background: #fff; z-index: 1;
+        box-shadow: inset 0 -1px 0 #dee2e6;
+    }
+
+    .dm-detail > summary {
+        cursor: pointer;
+        color: #2549b5;
+        padding: .5rem .75rem;
+        border-radius: 10px;
+        background: #f1f5f9;
+        list-style-position: inside;
+    }
+    .dm-detail > summary:hover { background: #e7edf5; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if analyse %}
+<script>
+  document.body.dataset.entrees = '{{ analyse.resume.entrees_moyennes|stringformat:"f" }}';
+  document.body.dataset.sorties = '{{ analyse.resume.sorties_moyennes|stringformat:"f" }}';
+</script>
+{% endif %}
+<section class="dm-shell py-5">
+  <div class="container" style="max-width: 980px;">
+
+    {% if error %}
+      <div class="alert alert-danger d-flex align-items-start gap-2 rounded-4 border-0 shadow-sm mb-4">
+        <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+        <div>{{ error }}</div>
+      </div>
+    {% endif %}
+
+    {% if analyse %}
+    <!-- ================= TABLEAU DE BORD ================= -->
+
+    <!-- 1. Métriques clés -->
+    <div class="dm-card p-4 p-md-5 mb-4">
+      <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-1">
+        <h2 class="h5 fw-bold mb-0">Ce qu'il faut retenir</h2>
+        <span class="small text-muted">
+          {{ analyse.nb_mois }} mois entier{{ analyse.nb_mois|pluralize }} · {{ analyse.premier_mois }} → {{ analyse.dernier_mois }}
+        </span>
+      </div>
+      <p class="small text-muted mb-4">
+        {% if analyse.controle_ok %}
+          <i class="bi bi-patch-check-fill text-success me-1"></i>Totaux vérifiés : ils concordent avec ceux imprimés sur vos relevés.
+        {% elif analyse.ecarts_controle %}
+          <i class="bi bi-exclamation-triangle-fill text-danger me-1"></i>Écart avec les totaux imprimés sur
+          {% for e in analyse.ecarts_controle %}<strong>{{ e }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %} — chiffres à vérifier.
+        {% endif %}
+      </p>
+
+      <div class="row g-3">
+        <div class="col-6 col-lg-3">
+          <div class="dm-kpi dm-kpi-in">
+            <div class="dm-kpi-label">Entrées</div>
+            <div class="dm-kpi-value" data-kpi="entrees">{{ analyse.resume.entrees_moyennes_affichees }}</div>
+            <div class="dm-kpi-unit">€ / mois en moyenne</div>
+          </div>
+        </div>
+        <div class="col-6 col-lg-3">
+          <div class="dm-kpi dm-kpi-out">
+            <div class="dm-kpi-label">Sorties</div>
+            <div class="dm-kpi-value" data-kpi="sorties">{{ analyse.resume.sorties_moyennes_affichees }}</div>
+            <div class="dm-kpi-unit">€ / mois en moyenne</div>
+          </div>
+        </div>
+        <div class="col-6 col-lg-3">
+          <div class="dm-kpi">
+            <div class="dm-kpi-label">Reste à vivre</div>
+            <div class="dm-kpi-value" data-kpi="reste">{% if not analyse.resume.reste_positif %}−{% endif %}{{ analyse.resume.reste_affiche }}</div>
+            <div class="dm-kpi-unit">€ / mois, entrées − sorties</div>
+          </div>
+        </div>
+        <div class="col-6 col-lg-3">
+          <div class="dm-kpi">
+            <div class="dm-kpi-label">Taux d'effort</div>
+            <div class="dm-kpi-value" data-kpi="effort">{{ analyse.resume.taux_effort }} %</div>
+            <div class="dm-kpi-unit">des entrées consommées</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="blocCorrige" class="dm-corrige mt-3" hidden>
+        <i class="bi bi-pencil-fill me-1"></i>
+        <strong>Avec vos lignes ajoutées :</strong>
+        sorties <span data-corr="sorties"></span> € · entrées <span data-corr="entrees"></span> €
+        · reste à vivre <span data-corr="reste"></span> € · taux d'effort <span data-corr="effort"></span>
+      </div>
+
+      <details class="dm-detail mt-4">
+        <summary class="small fw-semibold">Comment lire ces chiffres pour un dossier de prêt</summary>
+        <div class="small text-muted mt-3">
+          <p class="mb-2">
+            La banque compare vos <strong>charges récurrentes</strong> à vos <strong>revenus stables</strong>,
+            et plafonne le total à 35 % (règle HCSF). Le taux d'effort ci-dessus porte sur la totalité
+            de vos flux : il inclut les virements entre vos propres comptes, qui ne sont pas des charges.
+          </p>
+          <p class="mb-0">
+            Servez-vous des <strong>postes récurrents</strong> plus bas pour isoler vos vraies charges fixes,
+            puis reportez ce montant dans le simulateur.
+          </p>
+        </div>
+      </details>
+    </div>
+
+    <!-- 2. Entrées vs sorties, mois par mois -->
+    <div class="dm-card p-4 p-md-5 mb-4">
+      <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-2">
+        <h2 class="h5 fw-bold mb-0">Entrées et sorties, mois par mois</h2>
+        <span class="small text-muted">{{ analyse.nb_operations }} opérations sur {{ nb_fichiers }} relevé{{ nb_fichiers|pluralize }}</span>
+      </div>
+      <p class="small text-muted mb-4">
+        Seuls les mois couverts du 1<sup>er</sup> au dernier jour sont comptés.
+        Vos relevés vont du {{ analyse.couverture_debut }} au {{ analyse.couverture_fin }}.
+      </p>
+
+      <div class="dm-legende mb-3">
+        <span><i class="dm-puce dm-puce-in"></i>Entrées</span>
+        <span><i class="dm-puce dm-puce-out"></i>Sorties</span>
+      </div>
+
+      <div class="dm-chart mb-2">
+        {% for m in analyse.mois %}
+          <div class="dm-bar-wrap">
+            <div class="dm-paire">
+              <div class="dm-col">
+                <div class="dm-bar-value">{{ m.entrees_affichees }}</div>
+                <div class="dm-bar dm-bar-in" style="height: {{ m.hauteur_entrees }}%;"
+                     title="{{ m.libelle }} — {{ m.entrees_affichees }} € reçus sur {{ m.nb_entrees }} opérations"></div>
+              </div>
+              <div class="dm-col">
+                <div class="dm-bar-value">{{ m.sorties_affichees }}</div>
+                <div class="dm-bar dm-bar-out" style="height: {{ m.hauteur_sorties }}%;"
+                     title="{{ m.libelle }} — {{ m.sorties_affichees }} € dépensés sur {{ m.nb_sorties }} opérations"></div>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+      <div class="d-flex gap-3 text-center">
+        {% for m in analyse.mois %}
+          <div class="flex-fill"><div class="dm-bar-name">{{ m.court }}</div></div>
+        {% endfor %}
+      </div>
+
+      <div class="table-responsive mt-4">
+        <table class="table table-sm align-middle mb-0">
+          <thead>
+            <tr class="text-muted small">
+              <th class="fw-normal">Mois</th>
+              <th class="fw-normal text-end">Entrées</th>
+              <th class="fw-normal text-end">Sorties</th>
+              <th class="fw-normal text-end">Solde</th>
+              <th class="fw-normal text-end">Taux d'effort</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in analyse.mois %}
+              <tr>
+                <td class="fw-semibold">{{ m.libelle }}</td>
+                <td class="text-end dm-num text-success">{{ m.entrees_affichees }} €</td>
+                <td class="text-end dm-num">{{ m.sorties_affichees }} €</td>
+                <td class="text-end dm-num {% if m.solde_positif %}text-success{% else %}text-danger{% endif %}">
+                  {% if m.solde_positif %}+{% else %}−{% endif %}{{ m.solde_affiche }} €
+                </td>
+                <td class="text-end dm-num">{{ m.taux_effort }} %</td>
+              </tr>
+            {% endfor %}
+            <tr class="border-top border-2">
+              <td class="fw-bold">Moyenne</td>
+              <td class="text-end dm-num fw-bold text-success">{{ analyse.resume.entrees_moyennes_affichees }} €</td>
+              <td class="text-end dm-num fw-bold">{{ analyse.resume.sorties_moyennes_affichees }} €</td>
+              <td class="text-end dm-num fw-bold {% if analyse.resume.reste_positif %}text-success{% else %}text-danger{% endif %}">
+                {% if analyse.resume.reste_positif %}+{% else %}−{% endif %}{{ analyse.resume.reste_affiche }} €
+              </td>
+              <td class="text-end dm-num fw-bold">{{ analyse.resume.taux_effort }} %</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {% if analyse.releves_muets %}
+        <div class="alert alert-danger border-0 rounded-4 mt-4 mb-0 small">
+          <i class="bi bi-file-earmark-x-fill me-1"></i>
+          Aucune opération lue dans
+          {% for nom in analyse.releves_muets %}<strong>{{ nom }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}.
+          Ce{{ analyse.releves_muets|pluralize:"t,s" }} fichier{{ analyse.releves_muets|pluralize }} crée{{ analyse.releves_muets|pluralize }} un trou dans la couverture.
+        </div>
+      {% endif %}
+
+      {% if analyse.trous %}
+        <div class="alert alert-danger border-0 rounded-4 mt-3 mb-0 small">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>
+          Il manque un relevé : rien ne couvre
+          {% for t in analyse.trous %}<strong>du {{ t }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}.
+        </div>
+      {% endif %}
+
+      {% if analyse.mois_ecartes %}
+        <div class="alert alert-light border rounded-4 mt-3 mb-0 small">
+          <i class="bi bi-info-circle me-1"></i>
+          Écarté{{ analyse.mois_ecartes|pluralize }} faute d'être couvert{{ analyse.mois_ecartes|pluralize }} en entier :
+          {% for libelle in analyse.mois_ecartes %}<strong>{{ libelle }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}.
+        </div>
+      {% endif %}
+
+      {% if analyse.doublons_retires %}
+        <div class="alert alert-light border rounded-4 mt-3 mb-0 small">
+          <i class="bi bi-files me-1"></i>
+          {{ analyse.doublons_retires }} opération{{ analyse.doublons_retires|pluralize }} en double
+          {{ analyse.doublons_retires|pluralize:"retirée,retirées" }} : vos relevés se recouvrent sur certaines dates.
+        </div>
+      {% endif %}
+
+      {% if analyse.detail_releves %}
+        <details class="dm-detail mt-4">
+          <summary class="small fw-semibold">Ce que chaque relevé a couvert ({{ analyse.detail_releves|length }} fichier{{ analyse.detail_releves|length|pluralize }})</summary>
+          <div class="table-responsive mt-3">
+            <table class="table table-sm align-middle mb-0 small">
+              <thead>
+                <tr class="text-muted">
+                  <th class="fw-normal">Fichier</th>
+                  <th class="fw-normal">Période couverte</th>
+                  <th class="fw-normal text-end">Opérations</th>
+                  <th class="fw-normal">Lecture</th>
+                  <th class="fw-normal">Contrôle</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for d in analyse.detail_releves %}
+                  <tr{% if d.source == 'illisible' %} class="table-danger"{% endif %}>
+                    <td class="text-truncate" style="max-width: 220px;" title="{{ d.nom }}">{{ d.nom }}</td>
+                    <td class="dm-num">{{ d.periode }}</td>
+                    <td class="text-end dm-num">{{ d.nb_operations }}</td>
+                    <td class="text-muted">{{ d.source }}</td>
+                    <td>
+                      {% if d.controle.statut == 'ok' %}
+                        <span class="text-success"><i class="bi bi-check-circle-fill"></i> concordant</span>
+                      {% elif d.controle.statut == 'ecart' %}
+                        <span class="text-danger"><i class="bi bi-x-circle-fill"></i> écart {{ d.controle.ecart }} €</span>
+                      {% else %}
+                        <span class="text-muted">—</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      {% endif %}
+    </div>
+
+    <!-- 3. Postes récurrents -->
+    <div class="dm-card p-4 p-md-5 mb-4">
+      <h2 class="h5 fw-bold mb-1">Postes récurrents</h2>
+      <p class="small text-muted mb-4">
+        Ce qui revient d'un mois sur l'autre : la base de vos charges fixes et de vos revenus stables.
+      </p>
+
+      <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+        <label class="small fw-semibold mb-0" for="seuilRecurrence">
+          Présent sur au moins <span id="seuilValeur">{{ analyse.seuil_recurrence }}</span> % des mois
+        </label>
+        <input type="range" class="form-range flex-grow-1" style="max-width: 260px;"
+               id="seuilRecurrence" min="20" max="100" step="10" value="{{ analyse.seuil_recurrence }}">
+        <span class="small text-muted"><span id="nbPostes">0</span> poste(s)</span>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead>
+            <tr class="text-muted small">
+              <th class="fw-normal">Poste</th>
+              <th class="fw-normal">Sens</th>
+              <th class="fw-normal text-end">Fréquence</th>
+              <th class="fw-normal">Mois</th>
+              <th class="fw-normal text-end">Moyenne / mois</th>
+              <th class="fw-normal text-end">Total période</th>
+            </tr>
+          </thead>
+          <tbody id="corpsPostes">
+            {% for p in analyse.postes_recurrents %}
+              <tr class="dm-poste" data-frequence="{{ p.frequence }}">
+                <td class="text-truncate" style="max-width: 260px;" title="{{ p.exemple }}">{{ p.exemple }}</td>
+                <td>
+                  {% if p.sens == 'debit' %}
+                    <span class="dm-tag dm-tag-out">sortie</span>
+                  {% else %}
+                    <span class="dm-tag dm-tag-in">entrée</span>
+                  {% endif %}
+                </td>
+                <td class="text-end dm-num">{{ p.frequence }} %</td>
+                <td class="small text-muted">{{ p.mois }}</td>
+                <td class="text-end dm-num fw-semibold">{{ p.montant_moyen_affiche }} €</td>
+                <td class="text-end dm-num text-muted">{{ p.montant_total_affiche }} €</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 4. Lignes ajoutées à la main -->
+    <div class="dm-card p-4 p-md-5 mb-4">
+      <h2 class="h5 fw-bold mb-1">Ajouter une charge ou un revenu à venir</h2>
+      <p class="small text-muted mb-4">
+        Une assurance souscrite le mois dernier, un crédit qui démarre, un loyer qui change :
+        ajoutez-le ici pour l'intégrer aux métriques ci-dessus et à l'export, avant même qu'il
+        apparaisse sur un relevé.
+      </p>
+
+      <div class="row g-2 align-items-end mb-3">
+        <div class="col-12 col-md-5">
+          <label class="form-label small fw-semibold" for="ligneLibelle">Libellé</label>
+          <input type="text" class="form-control" id="ligneLibelle" placeholder="Assurance auto AXA">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label small fw-semibold" for="ligneMontant">Montant mensuel (€)</label>
+          <input type="number" class="form-control" id="ligneMontant" min="0" step="1" placeholder="45">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label small fw-semibold" for="ligneSens">Sens</label>
+          <select class="form-select" id="ligneSens">
+            <option value="debit">Sortie</option>
+            <option value="credit">Entrée</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-2">
+          <button type="button" class="btn btn-primary w-100 rounded-3" id="ajouterLigne">
+            <i class="bi bi-plus-lg me-1"></i>Ajouter
+          </button>
+        </div>
+      </div>
+
+      <div id="messageLigne" class="small text-danger mb-2" hidden></div>
+
+      <div class="table-responsive" id="tableauLignes" hidden>
+        <table class="table table-sm align-middle mb-0">
+          <thead>
+            <tr class="text-muted small">
+              <th class="fw-normal">Libellé</th>
+              <th class="fw-normal">Sens</th>
+              <th class="fw-normal text-end">Montant / mois</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="corpsLignes"></tbody>
+        </table>
+      </div>
+      <p class="small text-muted mb-0" id="aucuneLigne">Aucune ligne ajoutée pour l'instant.</p>
+    </div>
+
+    <!-- 5. Détail des opérations, mois par mois -->
+    <div class="dm-card p-4 p-md-5 mb-4">
+      <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-4">
+        <h2 class="h5 fw-bold mb-0">Le détail, mois par mois</h2>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Filtrer les opérations">
+          <button type="button" class="btn btn-outline-secondary active" data-filtre="tout">Tout</button>
+          <button type="button" class="btn btn-outline-secondary" data-filtre="debit">Sorties</button>
+          <button type="button" class="btn btn-outline-secondary" data-filtre="credit">Entrées</button>
+        </div>
+      </div>
+
+      <div class="accordion accordion-flush" id="detailMois">
+        {% for m in analyse.mois %}
+          <div class="accordion-item border-0 border-bottom">
+            <h3 class="accordion-header">
+              <button class="accordion-button {% if not forloop.first %}collapsed{% endif %} px-0 shadow-none bg-transparent"
+                      type="button" data-bs-toggle="collapse" data-bs-target="#mois{{ forloop.counter }}">
+                <span class="fw-semibold me-3">{{ m.libelle }}</span>
+                <span class="text-muted small">
+                  <span class="text-success">+{{ m.entrees_affichees }} €</span> ·
+                  −{{ m.sorties_affichees }} € ·
+                  {{ m.nb_entrees }}/{{ m.nb_sorties }} opérations
+                </span>
+              </button>
+            </h3>
+            <div id="mois{{ forloop.counter }}" class="accordion-collapse collapse {% if forloop.first %}show{% endif %}"
+                 data-bs-parent="#detailMois">
+              <div class="accordion-body px-0 pt-0">
+
+                <div class="row g-4 mb-4">
+                  <div class="col-md-6">
+                    <div class="dm-label mb-3">Répartition des sorties</div>
+                    {% for cat in m.categories_sorties %}
+                      <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-baseline mb-1">
+                          <span class="small">{{ cat.libelle }}</span>
+                          <span class="small fw-semibold dm-num">{{ cat.montant }} € <span class="text-muted fw-normal">· {{ cat.part }} %</span></span>
+                        </div>
+                        <div class="dm-cat-track"><div class="dm-cat-fill c{{ forloop.counter }}" style="width: {{ cat.part }}%;"></div></div>
+                      </div>
+                    {% empty %}
+                      <p class="small text-muted">Aucune sortie ce mois-ci.</p>
+                    {% endfor %}
+                  </div>
+                  <div class="col-md-6">
+                    <div class="dm-label mb-3">Répartition des entrées</div>
+                    {% for cat in m.categories_entrees %}
+                      <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-baseline mb-1">
+                          <span class="small">{{ cat.libelle }}</span>
+                          <span class="small fw-semibold dm-num">{{ cat.montant }} € <span class="text-muted fw-normal">· {{ cat.part }} %</span></span>
+                        </div>
+                        <div class="dm-cat-track"><div class="dm-cat-fill dm-cat-in" style="width: {{ cat.part }}%;"></div></div>
+                      </div>
+                    {% empty %}
+                      <p class="small text-muted">Aucune entrée ce mois-ci.</p>
+                    {% endfor %}
+                  </div>
+                </div>
+
+                <div class="dm-label mb-2">Toutes les opérations ({{ m.operations|length }})</div>
+                <div class="table-responsive dm-ops">
+                  <table class="table table-sm table-hover align-middle mb-0">
+                    <thead>
+                      <tr class="text-muted small">
+                        <th class="fw-normal">Date</th>
+                        <th class="fw-normal">Libellé</th>
+                        <th class="fw-normal">Catégorie</th>
+                        <th class="fw-normal text-end">Montant</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for op in m.operations %}
+                        <tr class="dm-op" data-sens="{{ op.sens }}">
+                          <td class="dm-num text-muted small">{{ op.jour }}</td>
+                          <td class="text-truncate" style="max-width: 300px;" title="{{ op.libelle }}">{{ op.libelle }}</td>
+                          <td class="small text-muted text-truncate" style="max-width: 220px;">{{ op.categorie }}</td>
+                          <td class="text-end dm-num fw-semibold {% if op.sens == 'credit' %}text-success{% endif %}">
+                            {% if op.sens == 'credit' %}+{% else %}−{% endif %}{{ op.montant_affiche }} €
+                          </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- 6. Suites -->
+    <div class="d-flex flex-wrap gap-2">
+      <form method="post" action="{% url 'export_depenses_excel' %}" id="formExport" class="d-inline">
+        {% csrf_token %}
+        <input type="hidden" name="analyse_json" value="{{ analyse_json }}">
+        <input type="hidden" name="lignes_manuelles" id="champLignes" value="[]">
+        <input type="hidden" name="seuil_recurrence" id="champSeuil" value="{{ analyse.seuil_recurrence }}">
+        <button type="submit" class="btn btn-success rounded-3">
+          <i class="bi bi-file-earmark-excel me-1"></i>Exporter en Excel
+        </button>
+      </form>
+      <a href="{% url 'depenses_mensuelles' %}" class="btn btn-outline-secondary rounded-3">
+        <i class="bi bi-arrow-counterclockwise me-1"></i>Analyser d'autres relevés
+      </a>
+      <a href="{% url 'simulateur_pret' %}" class="btn btn-primary rounded-3">
+        Passer au simulateur <i class="bi bi-arrow-right ms-1"></i>
+      </a>
+    </div>
+
+    {% else %}
+    <!-- ================= FORMULAIRE ================= -->
+
+    <div class="text-center mb-5">
+      <h1 class="fw-bold" style="letter-spacing: -.02em;">Combien je dépense chaque mois ?</h1>
+      <p class="text-muted mb-0" style="max-width: 620px; margin: 0 auto;">
+        Déposez vos relevés : l'outil additionne tout ce qui sort du compte — courses,
+        essence, prélèvements, chèques — et vous donne votre moyenne mensuelle et son évolution.
+      </p>
+    </div>
+
+    <div class="dm-card p-4 p-md-5 mb-4">
+      <form method="post" enctype="multipart/form-data" id="formDepenses">
+        {% csrf_token %}
+
+        <label class="dm-dropzone d-block mb-3 position-relative" id="dropzone" for="fichiersPdf">
+          <i class="bi bi-file-earmark-arrow-up display-5 text-secondary d-block mb-2"></i>
+          <div class="fw-semibold mb-1">Déposez vos relevés PDF ici</div>
+          <div class="text-muted small">ou cliquez pour les choisir — plusieurs fichiers à la fois</div>
+          <input type="file" name="fichiers_pdf" id="fichiersPdf" accept=".pdf" multiple>
+        </label>
+
+        <div id="listeFichiers" class="mb-3"></div>
+
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+          <div class="small text-muted">
+            <i class="bi bi-lightbulb me-1"></i>
+            Un relevé va du 12 au 11 : il en faut <strong>un de plus</strong> que de mois voulus.
+            4 relevés = 3 mois, 6 relevés = 5 mois.
+          </div>
+          <button type="submit" class="btn btn-primary btn-lg rounded-3 px-4" id="btnAnalyser" disabled>
+            <i class="bi bi-graph-up-arrow me-2"></i>Calculer mes dépenses
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div class="dm-card p-4 p-md-5">
+      <div class="dm-label mb-4">Comment ça marche</div>
+      <div class="row g-4">
+        <div class="col-md-4">
+          <div class="d-flex gap-3">
+            <span class="dm-step-num">1</span>
+            <div>
+              <div class="fw-semibold mb-1">Vous déposez</div>
+              <p class="small text-muted mb-0">Tous vos relevés PDF d'un coup, tels que téléchargés depuis votre banque. Aucun compte à créer.</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="d-flex gap-3">
+            <span class="dm-step-num">2</span>
+            <div>
+              <div class="fw-semibold mb-1">L'outil recompose vos mois</div>
+              <p class="small text-muted mb-0">Vos relevés sont recollés bout à bout ; seuls les mois couverts en entier sont comptés. Le sens de chaque opération vient de sa position dans le PDF, jamais un crédit pris pour une dépense.</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="d-flex gap-3">
+            <span class="dm-step-num">3</span>
+            <div>
+              <div class="fw-semibold mb-1">Vous obtenez votre moyenne</div>
+              <p class="small text-muted mb-0">Un total par mois entier, la répartition par poste, et le chiffre repris automatiquement dans le simulateur de prêt.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <hr class="my-4">
+      <p class="small text-muted mb-0">
+        <i class="bi bi-shield-check me-1"></i>
+        Vos relevés sont lus en mémoire puis supprimés immédiatement. Rien n'est enregistré sur le serveur.
+      </p>
+    </div>
+
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    // ----- Formulaire d'upload (état vide) -----------------------------
+    const input = document.getElementById('fichiersPdf');
+    if (input) {
+        const zone = document.getElementById('dropzone');
+        const liste = document.getElementById('listeFichiers');
+        const bouton = document.getElementById('btnAnalyser');
+
+        function afficher(files) {
+            liste.innerHTML = '';
+            bouton.disabled = files.length === 0;
+            Array.from(files).forEach(function (f) {
+                const ligne = document.createElement('div');
+                ligne.className = 'd-flex align-items-center gap-2 small py-1';
+                ligne.innerHTML = '<i class="bi bi-file-earmark-pdf text-danger"></i>'
+                    + '<span class="fw-semibold"></span><span class="text-muted"></span>';
+                ligne.children[1].textContent = f.name;
+                ligne.children[2].textContent = Math.round(f.size / 1024) + ' Ko';
+                liste.appendChild(ligne);
+            });
+        }
+
+        input.addEventListener('change', function () { afficher(input.files); });
+        ['dragenter', 'dragover'].forEach(function (ev) {
+            zone.addEventListener(ev, function (e) { e.preventDefault(); zone.classList.add('is-over'); });
+        });
+        ['dragleave', 'drop'].forEach(function (ev) {
+            zone.addEventListener(ev, function (e) { e.preventDefault(); zone.classList.remove('is-over'); });
+        });
+        zone.addEventListener('drop', function (e) {
+            input.files = e.dataTransfer.files;
+            afficher(input.files);
+        });
+        document.getElementById('formDepenses').addEventListener('submit', function () {
+            bouton.disabled = true;
+            bouton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Lecture des relevés…';
+        });
+        return;
+    }
+
+    // ----- Tableau de bord ---------------------------------------------
+    const socle = document.querySelector('[data-kpi="entrees"]');
+    if (!socle) return;
+
+    // Les chiffres du serveur sont formatés à la française (espace fine
+    // insécable en séparateur de milliers) : on repart des données brutes.
+    const BASE = {
+        entrees: parseFloat(document.body.dataset.entrees || '0'),
+        sorties: parseFloat(document.body.dataset.sorties || '0'),
+    };
+
+    function euros(valeur) {
+        return Math.round(valeur).toLocaleString('fr-FR').replace(/ /g, ' ');
+    }
+
+    // --- Seuil de récurrence -------------------------------------------
+    const curseur = document.getElementById('seuilRecurrence');
+    if (curseur) {
+        const valeur = document.getElementById('seuilValeur');
+        const compteur = document.getElementById('nbPostes');
+        const champSeuil = document.getElementById('champSeuil');
+
+        function filtrerPostes() {
+            const seuil = parseInt(curseur.value, 10);
+            let visibles = 0;
+            document.querySelectorAll('.dm-poste').forEach(function (ligne) {
+                const garde = parseInt(ligne.dataset.frequence, 10) >= seuil;
+                ligne.hidden = !garde;
+                if (garde) visibles += 1;
+            });
+            valeur.textContent = seuil;
+            compteur.textContent = visibles;
+            champSeuil.value = seuil;
+        }
+        curseur.addEventListener('input', filtrerPostes);
+        filtrerPostes();
+    }
+
+    // --- Filtre entrées / sorties du détail ------------------------------
+    document.querySelectorAll('[data-filtre]').forEach(function (bouton) {
+        bouton.addEventListener('click', function () {
+            const filtre = bouton.dataset.filtre;
+            document.querySelectorAll('[data-filtre]').forEach(function (b) {
+                b.classList.toggle('active', b === bouton);
+            });
+            document.querySelectorAll('.dm-op').forEach(function (ligne) {
+                ligne.hidden = filtre !== 'tout' && ligne.dataset.sens !== filtre;
+            });
+        });
+    });
+
+    // --- Lignes ajoutées à la main ---------------------------------------
+    // Elles vivent dans la page : l'application n'a pas de base, et la session
+    // (cookie signé) ne pourrait pas porter l'analyse complète. Le serveur ne
+    // les revoit qu'au moment de l'export.
+    const lignes = [];
+    const corps = document.getElementById('corpsLignes');
+    const tableau = document.getElementById('tableauLignes');
+    const vide = document.getElementById('aucuneLigne');
+    const champLignes = document.getElementById('champLignes');
+    const bloc = document.getElementById('blocCorrige');
+    const message = document.getElementById('messageLigne');
+
+    function recalculer() {
+        const sortiesSup = lignes.filter(l => l.sens === 'debit')
+            .reduce((total, l) => total + l.montant, 0);
+        const entreesSup = lignes.filter(l => l.sens === 'credit')
+            .reduce((total, l) => total + l.montant, 0);
+
+        champLignes.value = JSON.stringify(lignes);
+        tableau.hidden = lignes.length === 0;
+        vide.hidden = lignes.length > 0;
+
+        if (!lignes.length) { bloc.hidden = true; return; }
+
+        const sorties = BASE.sorties + sortiesSup;
+        const entrees = BASE.entrees + entreesSup;
+        const reste = entrees - sorties;
+        bloc.hidden = false;
+        bloc.querySelector('[data-corr="sorties"]').textContent = euros(sorties);
+        bloc.querySelector('[data-corr="entrees"]').textContent = euros(entrees);
+        bloc.querySelector('[data-corr="reste"]').textContent =
+            (reste < 0 ? '−' : '+') + euros(Math.abs(reste));
+        bloc.querySelector('[data-corr="effort"]').textContent =
+            (entrees ? Math.round(sorties / entrees * 100) : 0) + ' %';
+    }
+
+    function dessinerLignes() {
+        corps.innerHTML = '';
+        lignes.forEach(function (ligne, index) {
+            const tr = document.createElement('tr');
+
+            const tdLibelle = document.createElement('td');
+            tdLibelle.textContent = ligne.libelle;
+
+            const tdSens = document.createElement('td');
+            const tag = document.createElement('span');
+            tag.className = 'dm-tag ' + (ligne.sens === 'debit' ? 'dm-tag-out' : 'dm-tag-in');
+            tag.textContent = ligne.sens === 'debit' ? 'sortie' : 'entrée';
+            tdSens.appendChild(tag);
+
+            const tdMontant = document.createElement('td');
+            tdMontant.className = 'text-end dm-num fw-semibold';
+            tdMontant.textContent = (ligne.sens === 'debit' ? '−' : '+')
+                + euros(ligne.montant) + ' €';
+
+            const tdAction = document.createElement('td');
+            tdAction.className = 'text-end';
+            const retirer = document.createElement('button');
+            retirer.type = 'button';
+            retirer.className = 'btn btn-sm btn-link text-danger p-0';
+            retirer.textContent = 'Retirer';
+            retirer.addEventListener('click', function () {
+                lignes.splice(index, 1);
+                dessinerLignes();
+                recalculer();
+            });
+            tdAction.appendChild(retirer);
+
+            tr.append(tdLibelle, tdSens, tdMontant, tdAction);
+            corps.appendChild(tr);
+        });
+    }
+
+    const champLibelle = document.getElementById('ligneLibelle');
+    const champMontant = document.getElementById('ligneMontant');
+    const champSens = document.getElementById('ligneSens');
+
+    document.getElementById('ajouterLigne').addEventListener('click', function () {
+        const libelle = champLibelle.value.trim();
+        const montant = parseFloat(champMontant.value);
+        if (!libelle || !(montant > 0)) {
+            message.textContent = 'Indiquez un libellé et un montant supérieur à 0.';
+            message.hidden = false;
+            return;
+        }
+        message.hidden = true;
+        lignes.push({ libelle: libelle, montant: montant, sens: champSens.value });
+        champLibelle.value = '';
+        champMontant.value = '';
+        champLibelle.focus();
+        dessinerLignes();
+        recalculer();
+    });
+
+    champMontant.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); document.getElementById('ajouterLigne').click(); }
+    });
+
+    recalculer();
+})();
+</script>
+{% endblock %}

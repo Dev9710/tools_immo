@@ -3,6 +3,10 @@ from . import views
 
 urlpatterns = [
     path('', views.accueil, name='accueil'),
+    path('depenses-mensuelles/', views.depenses_mensuelles,
+         name='depenses_mensuelles'),
+    path('depenses-mensuelles/export-excel/', views.export_depenses_excel,
+         name='export_depenses_excel'),
     path('upload/', views.upload_releve, name='upload_releve'),
     path('charges-fixes/', views.charges_fixes, name='charges_fixes'),
     path('simulateur-pret/', views.simulateur_pret, name='simulateur_pret'),

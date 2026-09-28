@@ -1,8 +1,9 @@
 # views.py - Version refactorisée avec templates
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.http import HttpResponse, JsonResponse
 from django.template.loader import render_to_string
-from datetime import datetime
+from datetime import datetime, date, timedelta
+from dateutil.relativedelta import relativedelta
 from decimal import Decimal, InvalidOperation
 import tempfile
 import os
@@ -284,6 +285,10 @@ class BanquePostaleParserSimple:
 
         return 'autre'
 
+    # Restes du type d'opération, sans valeur informative comme libellé.
+    _FRAGMENT_RE = re.compile(
+        r'(?:INSTANTANE|PERMANENT|IMMEDIAT)?\s*(?:A|DE|POUR|D)?', re.IGNORECASE)
+
     def extract_libelle(self, description):
         """Extrait le libellé principal optimisé pour Banque Postale"""
         libelle = description.strip()
@@ -309,7 +314,11 @@ class BanquePostaleParserSimple:
         if match:
             return match.group(1).strip()
 
-        # Cas virements
+        # Cas virements. Le relevé ne porte pas toujours le bénéficiaire sur la
+        # ligne de l'opération : la capture peut alors ne ramener qu'un
+        # fragment du type d'opération (« INSTANTANEA », « POUR »), moins
+        # parlant que la description entière. On ne garde donc l'extraction que
+        # si elle apporte vraiment un nom.
         if 'VIREMENT' in libelle.upper():
             patterns = [
                 r'VIREMENT\s+(?:INSTANTANE\s+)?(?:A|POUR)\s+(.+?)(?:\s+COMPTE|\s+DEFAULT|$)',
@@ -318,7 +327,10 @@ class BanquePostaleParserSimple:
             for pattern in patterns:
                 match = re.search(pattern, libelle.upper())
                 if match:
-                    return match.group(1).strip()
+                    candidat = match.group(1).strip()
+                    if not self._FRAGMENT_RE.fullmatch(candidat):
+                        return candidat
+                    break
 
         # Cas prélèvements
         if 'PRELEVEMENT DE' in libelle.upper():
@@ -340,15 +352,170 @@ class BanquePostaleParserSimple:
     _OPERATIONS_MARKER = re.compile(
         r'(?:Vos\s+op[eé]rations|OP[EÉ]RATIONS)', re.IGNORECASE)
 
-    def extract_year(self, text):
-        """Année du relevé : d'abord une vraie date jj/mm/20aa (fiable), sinon
-        « Relevé … 20aa » (tolérant à l'accent), sinon l'année courante. Bornée
-        à 20xx pour ne pas capturer un numéro de compte ou d'agence."""
-        date_year = re.search(r'\b\d{2}/\d{2}/(20\d{2})\b', text)
-        if date_year:
-            return int(date_year.group(1))
-        releve_year = re.search(r'Relev[eé].*?(20\d{2})', text)
-        return int(releve_year.group(1)) if releve_year else datetime.now().year
+    # « Relevé édité le 12 septembre 2025 » : le seul repère de date fiable du
+    # document. pdfplumber colle souvent les mots, d'où les \s* partout.
+    _EDITION_RE = re.compile(
+        r'dit[ée]?\s*le\s*(\d{1,2})\s*'
+        r'(janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|'
+        r'septembre|octobre|novembre|d[ée]cembre)\s*(20\d{2})',
+        re.IGNORECASE)
+    _MOIS_NUM = {
+        'janvier': 1, 'fevrier': 2, 'février': 2, 'mars': 3, 'avril': 4,
+        'mai': 5, 'juin': 6, 'juillet': 7, 'aout': 8, 'août': 8,
+        'septembre': 9, 'octobre': 10, 'novembre': 11,
+        'decembre': 12, 'décembre': 12,
+    }
+
+    def extract_edition(self, text):
+        """Date d'édition du relevé (« Relevé édité le 12 septembre 2025 »),
+        ou None.
+
+        Ne PAS se rabattre sur la première date jj/mm/aaaa du document : les
+        mentions légales en contiennent (« PEL ouvert jusqu'au 31/12/2017 »),
+        ce qui datait les relevés récents de plusieurs années.
+        """
+        m = self._EDITION_RE.search(text)
+        if not m:
+            return None
+        mois = self._MOIS_NUM.get(m.group(2).lower())
+        if not mois:
+            return None
+        try:
+            return date(int(m.group(3)), mois, int(m.group(1)))
+        except ValueError:
+            return None
+
+    # « du 12/02/2026 au 11/03/2026 » : quand le relevé porte sa période en
+    # toutes lettres, c'est le repère le plus sûr.
+    _PERIODE_RE = re.compile(
+        r'du\s*(\d{2}/\d{2}/20\d{2})\s*au\s*(\d{2}/\d{2}/20\d{2})',
+        re.IGNORECASE)
+
+    def extract_periode(self, text):
+        """(début, fin) de la période couverte par le relevé, ou None.
+
+        Un relevé ne suit pas le mois civil : édité le 12 septembre, il court
+        du 12 août au 11 septembre. C'est cette fenêtre — déjà longue d'un
+        mois — qui sert d'unité de mesure, plutôt qu'un découpage en mois
+        civils qui obligerait à fournir deux PDF pour un seul mois complet.
+        """
+        # Une mention légale peut contenir « du … au … » : on n'accepte le
+        # motif que si l'intervalle ressemble à un mois de relevé.
+        for brut_debut, brut_fin in self._PERIODE_RE.findall(text[:2000]):
+            try:
+                debut = datetime.strptime(brut_debut, '%d/%m/%Y').date()
+                fin = datetime.strptime(brut_fin, '%d/%m/%Y').date()
+            except ValueError:
+                continue
+            if 25 <= (fin - debut).days + 1 <= 35:
+                return debut, fin
+
+        edition = self.extract_edition(text)
+        if not edition:
+            return None
+        return edition - relativedelta(months=1), edition - timedelta(days=1)
+
+    def build_year_resolver(self, text):
+        """Renvoie une fonction mois → année.
+
+        Un relevé est à cheval sur deux mois (édité le 12/09, il couvre le
+        12/08 au 11/09) et peut donc franchir un 31 décembre. Les opérations
+        dont le mois dépasse celui de l'édition appartiennent à l'année
+        précédente — sinon un relevé de janvier daterait décembre de l'année
+        suivante.
+        """
+        edition = self.extract_edition(text)
+        if edition:
+            mois_ref, annee_ref = edition.month, edition.year
+            return lambda mois: annee_ref if mois <= mois_ref else annee_ref - 1
+
+        # Repli : « Relevé … 20aa » dans l'en-tête, sinon l'année courante.
+        m = re.search(r'Relev[eé].*?(20\d{2})', text)
+        annee = int(m.group(1)) if m else datetime.now().year
+        return lambda mois: annee
+
+    # « 8 157,80 » arrive de pdfplumber en deux mots : « 8 » puis « 157,80 ».
+    # Ces deux motifs servent à les recoller.
+    _MILLIERS_RE = re.compile(r'^\d{1,3}$')
+    _CENTAINES_RE = re.compile(r'^\d{3}(?:[  .]?\d{3})*,\d{2}$')
+    # Écart horizontal maximal, en points, entre deux fragments d'un même
+    # nombre. Au-delà, ce sont deux valeurs distinctes.
+    ECART_MAX_FRAGMENTS = 6
+
+    # Abscisse de la frontière Débit/Crédit sur un relevé Banque Postale, quand
+    # l'en-tête n'a pas pu être localisé.
+    SEUIL_PAR_DEFAUT = 503.0
+    # Les colonnes de montants occupent la moitié droite de la page : un mot
+    # « crédit » situé à gauche appartient à une description d'opération
+    # (« CREDIT CARTE BANCAIRE »), pas à l'en-tête du tableau.
+    X_MIN_COLONNES = 300
+
+    # « Total des opérations   8 157,80   10 839,32 » : le relevé porte lui-même
+    # ses totaux débit et crédit. C'est le seul contrôle indépendant possible.
+    _TOTAUX_RE = re.compile(r'(?i)total\s*des\s*op')
+
+    def extract_totaux(self, lines):
+        """(total débit, total crédit) imprimés sur le relevé, ou None.
+
+        Sert à vérifier que le parsing n'a rien perdu. Sans ce garde-fou, un
+        montant mal découpé passait inaperçu : les totaux paraissaient
+        plausibles et le dossier partait à la banque avec de faux chiffres.
+        """
+        for ligne in lines:
+            if self._TOTAUX_RE.search(ligne['text']) and len(ligne['amounts']) >= 2:
+                montants = sorted(ligne['amounts'], key=lambda a: a[1])[:2]
+                debit = self.parse_montant(montants[0][0])
+                credit = self.parse_montant(montants[1][0])
+                if debit or credit:
+                    return debit, credit
+        return None
+
+    def _recoller_milliers(self, mots):
+        """Fusionne les fragments d'un même montant.
+
+        pdfplumber découpe « 8 157,80 » en « 8 » et « 157,80 » : sans
+        recollage, seul « 157,80 » est reconnu comme montant et l'opération
+        perd ses milliers. Le total d'un relevé s'en trouvait amputé de
+        plusieurs milliers d'euros, sans aucun signe d'erreur.
+
+        `mots` est trié par abscisse. On ne fusionne que si le fragment de
+        gauche est un groupe de 1 à 3 chiffres, celui de droite un groupe de
+        centaines complet, et les deux visuellement collés.
+        """
+        fusionnes = []
+        for mot in mots:
+            if fusionnes:
+                gauche = fusionnes[-1]
+                if (self._MILLIERS_RE.match(gauche['text'])
+                        and self._CENTAINES_RE.match(mot['text'])
+                        and mot['x0'] - gauche['x1'] < self.ECART_MAX_FRAGMENTS):
+                    fusionnes[-1] = {**gauche,
+                                     'text': gauche['text'] + ' ' + mot['text'],
+                                     'x1': mot['x1']}
+                    continue
+            fusionnes.append(mot)
+        return fusionnes
+
+    def _bornes_entete(self, mots_de_la_ligne):
+        """(x1 de « Débit », x1 de « Crédit ») si cette ligne est l'en-tête du
+        tableau des opérations, sinon (None, None).
+
+        Les deux mots doivent figurer sur la MÊME ligne et dans la zone des
+        colonnes de montants. Sans ces deux conditions, le premier « CREDIT »
+        rencontré dans un libellé d'opération devenait la frontière : le seuil
+        tombait vers x=97 au lieu de x=503, et la totalité des montants était
+        classée en crédit — un relevé entier disparaissait alors de l'analyse.
+        """
+        debit = credit = None
+        for w in mots_de_la_ligne:
+            if w['x1'] < self.X_MIN_COLONNES:
+                continue
+            t = w['text'].lower().strip(':')
+            if debit is None and t.startswith(('débit', 'debit')):
+                debit = w['x1']
+            elif credit is None and t.startswith(('crédit', 'credit')):
+                credit = w['x1']
+        return (debit, credit) if debit and credit else (None, None)
 
     def extract_word_lines(self, pdf_path):
         """Reconstruit les lignes du relevé à partir des mots *positionnés* et
@@ -369,12 +536,6 @@ class BanquePostaleParserSimple:
         with pdfplumber.open(pdf_path) as pdf:
             for page in pdf.pages:
                 words = page.extract_words()
-                for w in words:
-                    t = w['text'].lower()
-                    if debit_right is None and t.startswith(('débit', 'debit')):
-                        debit_right = w['x1']
-                    if credit_right is None and t.startswith(('crédit', 'credit')):
-                        credit_right = w['x1']
                 # Regrouper les mots en lignes visuelles (tolérance verticale).
                 clusters = []
                 for w in sorted(words, key=lambda w: w['top']):
@@ -382,22 +543,26 @@ class BanquePostaleParserSimple:
                         clusters[-1]['words'].append(w)
                     else:
                         clusters.append({'top': w['top'], 'words': [w]})
+
                 for cl in clusters:
-                    toks = sorted(cl['words'], key=lambda w: w['x0'])
+                    toks = self._recoller_milliers(
+                        sorted(cl['words'], key=lambda w: w['x0']))
+                    if debit_right is None or credit_right is None:
+                        d, c = self._bornes_entete(toks)
+                        if d and c:
+                            debit_right, credit_right = d, c
                     lines.append({
                         'text': ' '.join(w['text'] for w in toks),
                         'amounts': [(w['text'], w['x1'])
                                     for w in toks if self.AMOUNT_RE.match(w['text'])],
                     })
 
-        # Frontière Débit/Crédit : milieu des deux bords droits d'en-tête, avec
-        # des valeurs de repli observées sur les relevés Banque Postale.
+        # Frontière Débit/Crédit : milieu des deux bords droits d'en-tête, sinon
+        # la valeur de repli observée sur les relevés Banque Postale.
         if debit_right and credit_right:
             seuil = (debit_right + credit_right) / 2
-        elif credit_right:
-            seuil = credit_right - 20
         else:
-            seuil = 503.0
+            seuil = self.SEUIL_PAR_DEFAUT
         return lines, seuil
 
     def _clean_description(self, description):
@@ -406,12 +571,20 @@ class BanquePostaleParserSimple:
         description = re.sub(
             r'\d{2}[./]\d{2}[./](?:20)?\d{2}', '', description)
         description = description.replace("ACHATCB", "ACHAT CB ")
+        # La Banque Postale exporte souvent les mots collés
+        # ("VIREMENTINSTANTANEA") : on ré-espace les termes d'en-tête connus,
+        # sinon le libellé affiché est illisible.
+        description = re.sub(
+            r'\b(VIREMENT|PRELEVEMENT|PAIEMENT|ACHAT|RETRAIT|CHEQUE|'
+            r'INSTANTANE|REMBOURSEMENT|COTISATION)(?=[A-Z])',
+            r'\1 ', description)
         description = re.sub(r'IMMOBILIERE(\d+)', r'IMMOBILIERE \1', description)
         return re.sub(r'\s+', ' ', description).strip()
 
-    def parse_operations_lines(self, lines, seuil, year):
+    def parse_operations_lines(self, lines, seuil, annee_de):
         """Parse les lignes positionnées ; le sens (débit/crédit) vient de la
-        colonne dans laquelle tombe le montant."""
+        colonne dans laquelle tombe le montant. `annee_de` est la fonction
+        mois → année construite par build_year_resolver."""
         operations = []
         i = 0
         while i < len(lines):
@@ -427,9 +600,11 @@ class BanquePostaleParserSimple:
                 i += 1
                 continue
 
-            full_date = f"{date_match.group(1)}/{year or datetime.now().year}"
+            jour_mois = date_match.group(1)
             try:
-                date_operation = datetime.strptime(full_date, '%d/%m/%Y').date()
+                mois_op = int(jour_mois.split('/')[1])
+                date_operation = datetime.strptime(
+                    f"{jour_mois}/{annee_de(mois_op)}", '%d/%m/%Y').date()
             except ValueError:
                 i += 1
                 continue
@@ -478,7 +653,7 @@ class BanquePostaleParserSimple:
 
         return operations
 
-    def parse_operations_section(self, text_section, year=None):
+    def parse_operations_section(self, text_section, annee_de=None):
         """Repli texte (sans position) : on ne connaît pas le sens débit/crédit,
         il reste à None. Utilisé seulement si pdfplumber est indisponible."""
         operations = []
@@ -497,9 +672,12 @@ class BanquePostaleParserSimple:
                 i += 1
                 continue
 
-            full_date = f"{date_match.group(1)}/{year or datetime.now().year}"
+            jour_mois = date_match.group(1)
             try:
-                date_operation = datetime.strptime(full_date, '%d/%m/%Y').date()
+                mois_op = int(jour_mois.split('/')[1])
+                annee = annee_de(mois_op) if annee_de else datetime.now().year
+                date_operation = datetime.strptime(
+                    f"{jour_mois}/{annee}", '%d/%m/%Y').date()
             except ValueError:
                 i += 1
                 continue
@@ -540,7 +718,7 @@ class BanquePostaleParserSimple:
 
         return operations
 
-    def parse_pdf(self, pdf_path, types_selectionnes):
+    def parse_pdf(self, pdf_path, types_selectionnes=None):
         """Parse complet du PDF Banque Postale (géométrie des colonnes en
         priorité, texte brut en repli)."""
         try:
@@ -550,30 +728,56 @@ class BanquePostaleParserSimple:
                 full_text = '\n'.join(l['text'] for l in lines)
                 if len(full_text) < 50:
                     return {'success': False, 'error': 'PDF vide ou illisible'}
-                start = next((idx for idx, l in enumerate(lines)
-                             if self._OPERATIONS_MARKER.search(l['text'])), None)
-                if start is None:
-                    return {'success': False, 'error': 'Section "Vos opérations" non trouvée'}
-                year = self.extract_year(full_text)
+                annee_de = self.build_year_resolver(full_text)
+                periode = self.extract_periode(full_text)
+                totaux = self.extract_totaux(lines)
+
+                # Début de la section : la ligne d'en-tête « Débit … Crédit »
+                # (présente sur tout relevé) est la plus fiable ; sinon la
+                # mention « opérations ». Si aucune n'est trouvée, on parcourt
+                # tout et on se fie au repérage date + montant-en-colonne.
+                header_idx = next(
+                    (idx for idx, l in enumerate(lines)
+                     if re.search(r'(?i)d[eé]bit', l['text'])
+                     and re.search(r'(?i)cr[eé]dit', l['text'])), None)
+                if header_idx is None:
+                    header_idx = next(
+                        (idx for idx, l in enumerate(lines)
+                         if self._OPERATIONS_MARKER.search(l['text'])), None)
+
+                start = 0 if header_idx is None else header_idx + 1
                 all_operations = self.parse_operations_lines(
-                    lines[start + 1:], seuil, year)
+                    lines[start:], seuil, annee_de)
+
+                if not all_operations and header_idx is None:
+                    return {'success': False,
+                            'error': 'Section "Vos opérations" non trouvée'}
             else:
                 text = self.extract_text_from_pdf(pdf_path)
                 if not text or len(text) < 50:
                     return {'success': False, 'error': 'PDF vide ou illisible'}
                 if not self._OPERATIONS_MARKER.search(text):
                     return {'success': False, 'error': 'Section "Vos opérations" non trouvée'}
-                year = self.extract_year(text)
+                annee_de = self.build_year_resolver(text)
+                periode = self.extract_periode(text)
+                totaux = None  # sans positions, la ligne de totaux est illisible
                 sections = self._OPERATIONS_MARKER.split(text)
                 all_operations = []
                 for section in sections[1:]:
                     all_operations.extend(
-                        self.parse_operations_section(section, year))
+                        self.parse_operations_section(section, annee_de))
 
             # Grouper par type ; en charges fixes on ne veut que les sorties :
             # un crédit (sens détecté par la colonne) est exclu même si un
             # mot-clé le rangeait par erreur dans « debit »/« achat ».
-            operations_par_type = {k: [] for k in self.keywords.keys()}
+            # types_selectionnes=None : on garde tout, « autre » compris. C'est le
+            # mode utilisé par le total des dépenses, où aucune sortie ne doit
+            # être perdue à cause d'un libellé non reconnu.
+            tous_types = list(self.keywords.keys()) + ['autre']
+            if types_selectionnes is None:
+                types_selectionnes = tous_types
+
+            operations_par_type = {k: [] for k in tous_types}
             for op in all_operations:
                 if op['type'] in types_selectionnes:
                     operations_par_type[op['type']].append({
@@ -587,6 +791,8 @@ class BanquePostaleParserSimple:
             return {
                 'success': True,
                 'operations_par_type': operations_par_type,
+                'periode': periode,
+                'totaux_releve': totaux,
                 'types_traites': [t for t in types_selectionnes if operations_par_type[t]]
             }
 
@@ -921,8 +1127,14 @@ def calculer_statut_dossier(session_data):
 
 # VUES REFACTORISÉES - Maintenant avec templates
 def accueil(request):
-    """Page d'accueil - maintenant avec template"""
-    return render(request, 'analyseur/accueil.html')
+    """Page d'accueil. La carte « depenses mensuelles » affiche le chiffre deja
+    calcule quand il existe : l'accueil devient un point de situation, pas une
+    simple vitrine."""
+    depenses = request.session.get('depenses_mensuelles')
+    return render(request, 'analyseur/accueil.html', {
+        'depenses_mensuelles': depenses,
+        'depenses_affichees': format_euros(depenses) if depenses else None,
+    })
 
 
 def upload_releve(request):
@@ -1260,8 +1472,13 @@ def simulateur_pret(request):
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
 
-    # GET - Interface utilisateur avec template Django
-    return render(request, 'analyseur/simulateur_pret.html')
+    # GET - Interface utilisateur avec template Django. Si les depenses
+    # mensuelles ont deja ete analysees, on prerempli le champ « charges » :
+    # l'utilisateur n'a pas a recopier un chiffre que l'outil connait deja.
+    return render(request, 'analyseur/simulateur_pret.html', {
+        'depenses_mensuelles': request.session.get('depenses_mensuelles'),
+        'revenus_mensuels': request.session.get('revenus_mensuels'),
+    })
 
 
 def dashboard_dossier(request):
@@ -1339,3 +1556,672 @@ def export_dossier_pdf(request):
 
     p.save()
     return response
+
+
+# ---------------------------------------------------------------------------
+# Tableau de bord des flux du compte : ce qui sort, ce qui rentre, mois par mois
+#
+# L'analyse ne porte que sur des mois civils entièrement couverts par les
+# relevés fournis. Un relevé Banque Postale court du 12 d'un mois au 11 du
+# suivant : aucun relevé ne contient donc un mois civil à lui seul, mais deux
+# relevés consécutifs se complètent. N relevés qui se suivent = N-1 mois
+# complets (4 relevés → 3 mois, 6 relevés → 5 mois).
+# ---------------------------------------------------------------------------
+
+MOIS_FR = {
+    1: 'Janvier', 2: 'Février', 3: 'Mars', 4: 'Avril', 5: 'Mai', 6: 'Juin',
+    7: 'Juillet', 8: 'Août', 9: 'Septembre', 10: 'Octobre', 11: 'Novembre',
+    12: 'Décembre',
+}
+
+MOIS_COURT_FR = {
+    1: 'janv.', 2: 'févr.', 3: 'mars', 4: 'avril', 5: 'mai', 6: 'juin',
+    7: 'juil.', 8: 'août', 9: 'sept.', 10: 'oct.', 11: 'nov.', 12: 'déc.',
+}
+
+# Libellés des catégories du parser, tels qu'ils parlent à l'utilisateur.
+CATEGORIES_SORTIES = {
+    'achat': 'Achats carte (courses, essence, quotidien)',
+    'debit': 'Prélèvements (abonnements, énergie, impôts)',
+    'virement': 'Virements sortants',
+    'cheque': 'Chèques',
+    'autre': 'Autres sorties',
+    'depot': 'Divers',
+}
+
+CATEGORIES_ENTREES = {
+    'virement': 'Virements reçus (salaires, remboursements)',
+    'depot': 'Dépôts et remises',
+    'achat': 'Remboursements carte',
+    'debit': 'Régularisations',
+    'cheque': 'Chèques encaissés',
+    'autre': 'Autres entrées',
+}
+
+# Un poste présent sur au moins cette part des mois analysés est considéré
+# comme récurrent. Ajustable à l'écran : le bon seuil dépend du nombre de mois.
+SEUIL_RECURRENCE_PAR_DEFAUT = 40
+
+
+def format_euros(valeur):
+    """Montant arrondi à l'euro, séparateur de milliers français.
+
+    Les templates Django n'ont pas de filtre pour ça (`intcomma` de humanize
+    produit une virgule anglo-saxonne, et l'app n'installe pas humanize) : le
+    formatage se fait donc ici, comme tous les autres calculs d'affichage.
+    """
+    return '{:,.0f}'.format(round(float(valeur))).replace(',', ' ')
+
+
+def _dernier_jour_du_mois(annee, mois):
+    if mois == 12:
+        return date(annee, 12, 31)
+    return date(annee, mois + 1, 1) - timedelta(days=1)
+
+
+# Un relevé mensuel manquant creuse un écart d'environ 30 jours. En deçà de ce
+# seuil, l'écart entre deux relevés qui se suivent ne peut pas cacher un relevé
+# entier : ce sont des jours sans mouvement, pas une absence de couverture.
+ECART_MAX_SANS_OPERATION = 20
+
+
+def _fusionner_periodes(periodes):
+    """Fusionne les périodes des relevés en segments de couverture continue.
+
+    Deux relevés qui se suivent (le premier finit le 11, le second commence le
+    12) forment un seul segment : c'est ce qui permet à un mois civil d'être
+    couvert par deux relevés différents.
+
+    Les bornes d'un relevé sont parfois déduites de ses opérations, faute d'en
+    lire la période dans le PDF. Un week-end sans dépense en fin de relevé et
+    trois jours calmes au début du suivant créaient alors un faux trou, qui
+    suffisait à écarter le mois entier de l'analyse. On comble donc les écarts
+    trop courts pour contenir un relevé manquant.
+    """
+    segments = []
+    for debut, fin in sorted(periodes):
+        if segments and debut <= segments[-1][1] + timedelta(
+                days=ECART_MAX_SANS_OPERATION):
+            segments[-1][1] = max(segments[-1][1], fin)
+        else:
+            segments.append([debut, fin])
+    return [(d, f) for d, f in segments]
+
+
+def _mois_entierement_couvert(annee, mois, segments):
+    premier = date(annee, mois, 1)
+    dernier = _dernier_jour_du_mois(annee, mois)
+    return any(d <= premier and f >= dernier for d, f in segments)
+
+
+def _dedupliquer(operations, periodes):
+    """Retire les opérations comptées deux fois par des relevés qui se
+    recouvrent.
+
+    La déduplication ne s'applique QUE dans les zones couvertes par plusieurs
+    relevés : ailleurs, deux opérations identiques le même jour (deux passages
+    à la même station-service) sont bien deux dépenses distinctes et doivent
+    rester.
+    """
+    zones = [
+        (max(a[0], b[0]), min(a[1], b[1]))
+        for i, a in enumerate(periodes) for b in periodes[i + 1:]
+        if max(a[0], b[0]) <= min(a[1], b[1])
+    ]
+    if not zones:
+        return operations, 0
+
+    retenues, vues, retirees = [], set(), 0
+    for op in operations:
+        if any(d <= op['date'] <= f for d, f in zones):
+            cle = (op['date'], op['montant'], op['description'], op.get('sens'))
+            if cle in vues:
+                retirees += 1
+                continue
+            vues.add(cle)
+        retenues.append(op)
+    return retenues, retirees
+
+
+# Préfixes qui décrivent le TYPE d'opération, pas le bénéficiaire : les retirer
+# fait converger « ACHAT CB CARREFOUR » et « CARREFOUR » vers le même poste.
+_PREFIXES_OPERATION = re.compile(
+    r'^(?:ACHAT\s+CB|PAIEMENT\s+CB|ACHAT|PAIEMENT|PRELEVEMENT\s+DE|'
+    r'PRELEVEMENT|VIREMENT\s+INSTANTANE\s*[AD]?E?|VIREMENT\s+PERMANENT|'
+    r'VIREMENT\s+POUR|VIREMENT\s+DE|VIREMENT|RETRAIT|CHEQUE|VERSEMENT|REMISE)\s*',
+    re.IGNORECASE)
+
+
+def _cle_poste(libelle):
+    """Clé de regroupement d'un libellé, pour repérer les postes récurrents.
+
+    On retire le préfixe de type d'opération, les chiffres et la ponctuation,
+    puis on ne garde que les deux premiers mots : « ACHAT CB CARREFOUR 1234 »
+    et « CARREFOUR.FR » se rejoignent, sans fusionner deux commerçants
+    différents.
+    """
+    texte = _PREFIXES_OPERATION.sub('', (libelle or '').upper())
+    texte = re.sub(r'[^A-Z ]+', ' ', texte)
+    mots = [m for m in texte.split() if len(m) > 2]
+    return ' '.join(mots[:2]) if mots else (libelle or '').upper()[:20]
+
+
+def _repartition(operations, libelles_categories):
+    """Répartition par catégorie, de la plus lourde à la plus légère."""
+    total = sum(op['montant'] for op in operations)
+    par_categorie = {}
+    for op in operations:
+        cat = op.get('type', 'autre')
+        par_categorie[cat] = par_categorie.get(cat, Decimal('0')) + op['montant']
+    return sorted(
+        ({'libelle': libelles_categories.get(cle, cle.capitalize()),
+          'montant': format_euros(montant),
+          'brut': float(montant),
+          'part': round(float(montant) / float(total) * 100) if total else 0}
+         for cle, montant in par_categorie.items()),
+        key=lambda c: c['brut'], reverse=True)
+
+
+def _ligne_operation(op):
+    """Une opération telle qu'affichée dans les tableaux détaillés."""
+    return {
+        'date': op['date'].strftime('%d/%m/%Y'),
+        'jour': op['date'].strftime('%d/%m'),
+        'libelle': (op['libelle'] or op['description'])[:60],
+        'categorie': (CATEGORIES_SORTIES if op['sens'] == 'debit'
+                      else CATEGORIES_ENTREES).get(op.get('type', 'autre'),
+                                                   'Autres'),
+        'montant': float(op['montant']),
+        'montant_affiche': format_euros(op['montant']),
+        'sens': op['sens'],
+        'poste': _cle_poste(op['libelle'] or op['description']),
+    }
+
+
+def _postes_recurrents(mois_complets, nb_mois):
+    """Postes qui reviennent d'un mois sur l'autre, entrants comme sortants.
+
+    Un poste est décrit par sa clé normalisée. On retient sa fréquence (nombre
+    de mois où il apparaît) et son montant mensuel moyen — c'est cette base qui
+    permet de distinguer une charge fixe d'une dépense ponctuelle.
+    """
+    postes = {}
+    for m in mois_complets:
+        vus_ce_mois = {}
+        for op in m['operations']:
+            cle = (op['poste'], op['sens'])
+            entree = vus_ce_mois.setdefault(cle, {'montant': 0.0, 'nb': 0})
+            entree['montant'] += op['montant']
+            entree['nb'] += 1
+        for cle, agrege in vus_ce_mois.items():
+            poste = postes.setdefault(cle, {
+                'poste': cle[0], 'sens': cle[1],
+                'mois': [], 'montants': [], 'nb_operations': 0,
+                'exemple': '',
+            })
+            poste['mois'].append(m['court'])
+            poste['montants'].append(agrege['montant'])
+            poste['nb_operations'] += agrege['nb']
+            if not poste['exemple']:
+                poste['exemple'] = next(
+                    op['libelle'] for op in m['operations']
+                    if op['poste'] == cle[0] and op['sens'] == cle[1])
+
+    resultat = []
+    for poste in postes.values():
+        nb = len(poste['mois'])
+        moyen = sum(poste['montants']) / nb
+        resultat.append({
+            'poste': poste['poste'],
+            'exemple': poste['exemple'],
+            'sens': poste['sens'],
+            'nb_mois': nb,
+            'frequence': round(nb / nb_mois * 100),
+            'mois': ', '.join(poste['mois']),
+            'montant_moyen': round(moyen, 2),
+            'montant_moyen_affiche': format_euros(moyen),
+            'montant_total': round(sum(poste['montants']), 2),
+            'montant_total_affiche': format_euros(sum(poste['montants'])),
+            'nb_operations': poste['nb_operations'],
+        })
+    # Les plus fréquents d'abord, puis les plus lourds : c'est l'ordre dans
+    # lequel on veut lire ses charges fixes.
+    resultat.sort(key=lambda p: (-p['frequence'], -p['montant_moyen']))
+    return resultat
+
+
+def analyser_flux_mensuels(releves):
+    """Analyse complète des flux du compte, par mois civil entièrement couvert.
+
+    `releves` : liste de dicts {nom, periode, operations}. Débits ET crédits
+    sont conservés — le sens vient de la colonne du PDF, seule source fiable.
+
+    Renvoie None si aucun mois n'est complet : mieux vaut expliquer ce qui
+    manque que présenter un total amputé de la moitié d'un mois.
+    """
+    # `detail` retrace ce que chaque fichier a apporté. C'est le seul moyen,
+    # face à un trou de couverture, de distinguer un relevé réellement absent
+    # d'un fichier mal lu.
+    periodes, operations, detail, ecarts_controle = [], [], [], []
+    for releve in releves:
+        connues = [op for op in releve['operations']
+                   if op.get('sens') in ('debit', 'credit')]
+        if not connues:
+            detail.append({'nom': releve['nom'], 'periode': 'aucune opération lue',
+                           'debut': date.max, 'nb_operations': 0,
+                           'source': 'illisible',
+                           'controle': {'statut': 'absent', 'ecart': ''}})
+            continue
+        operations.extend(connues)
+        dates = [op['date'] for op in connues]
+        lue = releve.get('periode')
+        debut, fin = lue or (min(dates), max(dates))
+        debut, fin = min(debut, min(dates)), max(fin, max(dates))
+        periodes.append((debut, fin))
+        # Contrôle : ce qu'on a additionné doit égaler ce que le relevé
+        # annonce. Un écart signale un montant mal lu, donc une analyse à
+        # ne pas présenter à une banque.
+        totaux = releve.get('totaux_releve')
+        controle = {'statut': 'absent', 'ecart': ''}
+        if totaux:
+            attendu_d, attendu_c = float(totaux[0]), float(totaux[1])
+            lu_d = float(sum(op['montant'] for op in connues
+                             if op['sens'] == 'debit'))
+            lu_c = float(sum(op['montant'] for op in connues
+                             if op['sens'] == 'credit'))
+            ecart = max(abs(attendu_d - lu_d), abs(attendu_c - lu_c))
+            controle = {
+                'statut': 'ok' if ecart < 1 else 'ecart',
+                'ecart': format_euros(ecart) if ecart >= 1 else '',
+                'attendu': f"{format_euros(attendu_d)} / {format_euros(attendu_c)}",
+            }
+            if ecart >= 1:
+                ecarts_controle.append(f"{releve['nom']} ({format_euros(ecart)} €)")
+
+        detail.append({
+            'nom': releve['nom'],
+            'periode': f"{debut:%d/%m/%Y} → {fin:%d/%m/%Y}",
+            'debut': debut,
+            'nb_operations': len(connues),
+            'source': 'lue dans le PDF' if lue else 'déduite des opérations',
+            'controle': controle,
+        })
+
+    # Chronologique ; les fichiers muets, sans date exploitable, ferment la
+    # liste (date.max) plutôt que de la parasiter en tête.
+    detail.sort(key=lambda d: d['debut'])
+
+    if not operations:
+        return None
+
+    operations, doublons = _dedupliquer(operations, periodes)
+    segments = _fusionner_periodes(periodes)
+
+    par_mois = {}
+    for op in operations:
+        par_mois.setdefault((op['date'].year, op['date'].month), []).append(op)
+
+    mois_complets, mois_ecartes = [], []
+    for (annee, mois) in sorted(par_mois):
+        libelle = f"{MOIS_FR[mois]} {annee}"
+        if not _mois_entierement_couvert(annee, mois, segments):
+            mois_ecartes.append(libelle)
+            continue
+
+        du_mois = par_mois[(annee, mois)]
+        debits = [op for op in du_mois if op['sens'] == 'debit']
+        credits = [op for op in du_mois if op['sens'] == 'credit']
+        sorties = float(sum(op['montant'] for op in debits))
+        entrees = float(sum(op['montant'] for op in credits))
+
+        lignes = sorted((_ligne_operation(op) for op in du_mois),
+                        key=lambda l: (-l['montant'],))
+        mois_complets.append({
+            'cle': f"{annee}-{mois:02d}",
+            'libelle': libelle,
+            'court': f"{MOIS_COURT_FR[mois]} {annee}",
+            'sorties': round(sorties, 2),
+            'sorties_affichees': format_euros(sorties),
+            'entrees': round(entrees, 2),
+            'entrees_affichees': format_euros(entrees),
+            'solde': round(entrees - sorties, 2),
+            'solde_affiche': format_euros(abs(entrees - sorties)),
+            'solde_positif': entrees >= sorties,
+            'taux_effort': round(sorties / entrees * 100) if entrees else 0,
+            'nb_sorties': len(debits),
+            'nb_entrees': len(credits),
+            'categories_sorties': _repartition(debits, CATEGORIES_SORTIES),
+            'categories_entrees': _repartition(credits, CATEGORIES_ENTREES),
+            'operations': lignes,
+        })
+
+    if not mois_complets:
+        return None
+
+    # Trou de couverture : un relevé manquant au milieu de la série coupe la
+    # continuité, et des mois disparaissent silencieusement de l'analyse.
+    trous = [
+        f"{segments[i][1] + timedelta(days=1):%d/%m/%Y} au "
+        f"{segments[i + 1][0] - timedelta(days=1):%d/%m/%Y}"
+        for i in range(len(segments) - 1)
+    ]
+
+    nb = len(mois_complets)
+    sorties_moy = sum(m['sorties'] for m in mois_complets) / nb
+    entrees_moy = sum(m['entrees'] for m in mois_complets) / nb
+
+    # Échelle commune aux deux séries du graphique : sans elle, entrées et
+    # sorties ne seraient pas comparables d'un coup d'œil.
+    maximum = max(max(m['sorties'], m['entrees']) for m in mois_complets) or 1
+    for m in mois_complets:
+        m['hauteur_sorties'] = round(m['sorties'] / maximum * 100)
+        m['hauteur_entrees'] = round(m['entrees'] / maximum * 100)
+
+    tendance = None
+    if nb >= 2:
+        dernier = mois_complets[-1]
+        reference = sum(m['sorties'] for m in mois_complets[:-1]) / (nb - 1)
+        ecart = dernier['sorties'] - reference
+        variation = (ecart / reference * 100) if reference else 0
+        tendance = {
+            'sens': 'stable' if abs(variation) < 5 else (
+                'hausse' if variation > 0 else 'baisse'),
+            'variation': round(abs(variation)),
+            'ecart': format_euros(abs(ecart)),
+            'mois': dernier['libelle'],
+        }
+
+    return {
+        'mois': mois_complets,
+        'nb_mois': nb,
+        'premier_mois': mois_complets[0]['libelle'],
+        'dernier_mois': mois_complets[-1]['libelle'],
+        'postes_recurrents': _postes_recurrents(mois_complets, nb),
+        'seuil_recurrence': SEUIL_RECURRENCE_PAR_DEFAUT,
+        'resume': {
+            'entrees_moyennes': round(entrees_moy, 2),
+            'entrees_moyennes_affichees': format_euros(entrees_moy),
+            'sorties_moyennes': round(sorties_moy, 2),
+            'sorties_moyennes_affichees': format_euros(sorties_moy),
+            'reste': round(entrees_moy - sorties_moy, 2),
+            'reste_affiche': format_euros(abs(entrees_moy - sorties_moy)),
+            'reste_positif': entrees_moy >= sorties_moy,
+            'taux_effort': round(sorties_moy / entrees_moy * 100) if entrees_moy else 0,
+            'total_entrees_affiche': format_euros(
+                sum(m['entrees'] for m in mois_complets)),
+            'total_sorties_affiche': format_euros(
+                sum(m['sorties'] for m in mois_complets)),
+        },
+        'tendance': tendance,
+        'detail_releves': detail,
+        'releves_muets': [d['nom'] for d in detail if d['source'] == 'illisible'],
+        'mois_ecartes': mois_ecartes,
+        'trous': trous,
+        'doublons_retires': doublons,
+        'ecarts_controle': ecarts_controle,
+        'controle_ok': not ecarts_controle and any(
+            d['controle']['statut'] == 'ok' for d in detail),
+        'couverture_debut': min(d for d, _ in segments).strftime('%d/%m/%Y'),
+        'couverture_fin': max(f for _, f in segments).strftime('%d/%m/%Y'),
+        'nb_operations': sum(m['nb_sorties'] + m['nb_entrees']
+                             for m in mois_complets),
+    }
+
+
+def _lire_releves(fichiers):
+    """Parse les PDF uploadés. Lève une exception au premier fichier illisible
+    en tant que PDF ; un fichier lisible mais sans opération est laissé passer,
+    l'analyse le signalera comme muet."""
+    parser = BanquePostaleParserSimple()
+    releves = []
+    for fichier in fichiers:
+        temp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+        try:
+            for chunk in fichier.chunks():
+                temp_pdf.write(chunk)
+            temp_pdf.close()
+            resultats = parser.parse_pdf(temp_pdf.name)
+        finally:
+            if os.path.exists(temp_pdf.name):
+                os.unlink(temp_pdf.name)
+
+        if not resultats['success']:
+            raise Exception(f"{fichier.name} : {resultats['error']}")
+
+        operations = []
+        for type_op, ops in resultats['operations_par_type'].items():
+            for op in ops:
+                op['type'] = type_op
+                operations.append(op)
+
+        releves.append({
+            'nom': fichier.name,
+            'periode': resultats.get('periode'),
+            'totaux_releve': resultats.get('totaux_releve'),
+            'operations': operations,
+        })
+    return releves
+
+
+def depenses_mensuelles(request):
+    """Tableau de bord des flux du compte. Rien n'est stocké : seules les
+    moyennes sont mémorisées en session, pour préremplir le simulateur."""
+    if request.method != 'POST':
+        return render(request, 'analyseur/depenses_mensuelles.html')
+
+    fichiers = request.FILES.getlist('fichiers_pdf')
+    if not fichiers:
+        return render(request, 'analyseur/depenses_mensuelles.html', {
+            'error': "Ajoutez vos relevés PDF. Il en faut au moins deux qui se "
+                     "suivent pour reconstituer un mois entier."
+        })
+
+    try:
+        releves = _lire_releves(fichiers)
+    except Exception as e:
+        return render(request, 'analyseur/depenses_mensuelles.html',
+                      {'error': str(e)})
+
+    toutes = [op for r in releves for op in r['operations']]
+    if not toutes:
+        return render(request, 'analyseur/depenses_mensuelles.html', {
+            'error': "Aucune opération lue dans ce(s) PDF. Vérifiez qu'il "
+                     "s'agit bien d'un relevé de compte Banque Postale."
+        })
+
+    # Sans pdfplumber le sens débit/crédit est inconnu : mieux vaut le dire que
+    # d'afficher un total silencieusement faux.
+    if all(op.get('sens') is None for op in toutes):
+        return render(request, 'analyseur/depenses_mensuelles.html', {
+            'error': "Impossible de distinguer les débits des crédits sur ce "
+                     "relevé (module pdfplumber indisponible). Installez les "
+                     "dépendances avec « pip install -r requirements.txt »."
+        })
+
+    analyse = analyser_flux_mensuels(releves)
+    if not analyse:
+        # Cas courant du premier essai : un seul relevé, qui court du 12 au 11
+        # et ne contient donc aucun mois civil entier.
+        dates = [op['date'] for op in toutes if op.get('sens')]
+        couverture = (f" Vos relevés couvrent du {min(dates):%d/%m/%Y} au "
+                      f"{max(dates):%d/%m/%Y}.") if dates else ''
+        return render(request, 'analyseur/depenses_mensuelles.html', {
+            'error': "Aucun mois entier dans ces relevés." + couverture +
+                     " Un relevé va du 12 d'un mois au 11 du suivant : il en "
+                     "faut deux qui se suivent pour reconstituer un mois "
+                     "complet, et N+1 pour analyser N mois."
+        })
+
+    # Report vers le simulateur : les deux chiffres que la banque regarde.
+    request.session['depenses_mensuelles'] = analyse['resume']['sorties_moyennes']
+    request.session['revenus_mensuels'] = analyse['resume']['entrees_moyennes']
+
+    return render(request, 'analyseur/depenses_mensuelles.html', {
+        'analyse': analyse,
+        'nb_fichiers': len(fichiers),
+        # Embarqué dans la page : l'export Excel le renvoie tel quel, augmenté
+        # des lignes saisies à la main. L'app n'ayant pas de base, c'est la
+        # page elle-même qui porte l'état entre l'analyse et l'export.
+        'analyse_json': json.dumps(analyse, ensure_ascii=False, default=str),
+    })
+
+
+# ---------------------------------------------------------------------------
+# Export Excel du tableau de bord
+# ---------------------------------------------------------------------------
+
+def _feuille(classeur, titre, entetes, lignes, largeurs=None):
+    """Onglet standard : en-tête bleue figée, colonnes dimensionnées.
+
+    openpyxl est importé ici et non en tête de module : le reste du fichier le
+    traite comme optionnel (repli CSV de `create_excel_multi_onglets`), et un
+    import global ferait échouer l'application entière s'il manquait.
+    """
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+
+    feuille = classeur.create_sheet(titre)
+    feuille.append(entetes)
+    for cellule in feuille[1]:
+        cellule.font = Font(bold=True, color='FFFFFF')
+        cellule.fill = PatternFill('solid', fgColor='2549B5')
+        cellule.alignment = Alignment(horizontal='center')
+    for ligne in lignes:
+        feuille.append(ligne)
+    for i, largeur in enumerate(largeurs or [], start=1):
+        feuille.column_dimensions[get_column_letter(i)].width = largeur
+    feuille.freeze_panes = 'A2'
+    return feuille
+
+
+def export_depenses_excel(request):
+    """Classeur reprenant ce que la page affiche, lignes ajoutées comprises.
+
+    L'application ne persiste rien : c'est la page qui renvoie l'analyse dans
+    un champ caché. L'export est donc sans état, et reflète exactement ce que
+    l'utilisateur avait sous les yeux — y compris ses ajustements manuels.
+    """
+    if request.method != 'POST':
+        return redirect('depenses_mensuelles')
+
+    try:
+        from openpyxl import Workbook
+    except ImportError:
+        return HttpResponse("Module openpyxl non installé", status=500)
+
+    try:
+        analyse = json.loads(request.POST.get('analyse_json') or '{}')
+        manuelles = json.loads(request.POST.get('lignes_manuelles') or '[]')
+    except json.JSONDecodeError:
+        return HttpResponse("Données d'analyse illisibles", status=400)
+    if not analyse.get('mois'):
+        return redirect('depenses_mensuelles')
+
+    resume = analyse['resume']
+    sorties_manuelles = sum(float(l['montant']) for l in manuelles
+                            if l.get('sens') == 'debit')
+    entrees_manuelles = sum(float(l['montant']) for l in manuelles
+                            if l.get('sens') == 'credit')
+    sorties_totales = resume['sorties_moyennes'] + sorties_manuelles
+    entrees_totales = resume['entrees_moyennes'] + entrees_manuelles
+
+    classeur = Workbook()
+    classeur.remove(classeur.active)
+
+    # --- Synthèse : ce qu'un conseiller regarde en premier ------------------
+    lignes = [
+        ['Période analysée',
+         f"{analyse['premier_mois']} → {analyse['dernier_mois']}"],
+        ['Mois entiers analysés', analyse['nb_mois']],
+        ['Relevés fournis', len(analyse.get('detail_releves', []))],
+        ['Contrôle des totaux',
+         'Concordant avec les relevés' if analyse.get('controle_ok')
+         else 'ÉCART DÉTECTÉ — vérifier'],
+        [],
+        ['ENTRÉES moyennes (€/mois)', round(resume['entrees_moyennes'], 2)],
+        ['SORTIES moyennes (€/mois)', round(resume['sorties_moyennes'], 2)],
+        ['Reste à vivre moyen (€/mois)', round(resume['reste'], 2)],
+        ["Taux d'effort (sorties / entrées)", f"{resume['taux_effort']} %"],
+    ]
+    if manuelles:
+        lignes += [
+            [],
+            ['Charges ajoutées à la main (€/mois)', round(sorties_manuelles, 2)],
+            ['Revenus ajoutés à la main (€/mois)', round(entrees_manuelles, 2)],
+            ['SORTIES corrigées (€/mois)', round(sorties_totales, 2)],
+            ['ENTRÉES corrigées (€/mois)', round(entrees_totales, 2)],
+            ['Reste à vivre corrigé (€/mois)',
+             round(entrees_totales - sorties_totales, 2)],
+            ["Taux d'effort corrigé",
+             f"{round(sorties_totales / entrees_totales * 100) if entrees_totales else 0} %"],
+        ]
+    _feuille(classeur, 'Synthèse', ['Indicateur', 'Valeur'], lignes, [38, 34])
+
+    # --- Mois par mois ------------------------------------------------------
+    _feuille(
+        classeur, 'Mois par mois',
+        ['Mois', 'Entrées (€)', 'Sorties (€)', 'Solde (€)',
+         "Taux d'effort", 'Nb entrées', 'Nb sorties'],
+        [[m['libelle'], m['entrees'], m['sorties'], m['solde'],
+          f"{m['taux_effort']} %", m['nb_entrees'], m['nb_sorties']]
+         for m in analyse['mois']],
+        [18, 14, 14, 14, 14, 12, 12])
+
+    # --- Postes récurrents --------------------------------------------------
+    seuil = int(request.POST.get('seuil_recurrence') or
+                analyse.get('seuil_recurrence', SEUIL_RECURRENCE_PAR_DEFAUT))
+    _feuille(
+        classeur, 'Postes récurrents',
+        ['Poste', 'Sens', 'Fréquence', 'Mois concernés',
+         'Montant moyen (€/mois)', 'Total période (€)', 'Nb opérations'],
+        [[p['exemple'], 'Sortie' if p['sens'] == 'debit' else 'Entrée',
+          f"{p['frequence']} %", p['mois'], p['montant_moyen'],
+          p['montant_total'], p['nb_operations']]
+         for p in analyse['postes_recurrents'] if p['frequence'] >= seuil],
+        [36, 10, 12, 30, 22, 20, 14])
+
+    # --- Toutes les opérations ---------------------------------------------
+    _feuille(
+        classeur, 'Opérations',
+        ['Mois', 'Date', 'Libellé', 'Catégorie', 'Sens', 'Montant (€)'],
+        [[m['libelle'], op['date'], op['libelle'], op['categorie'],
+          'Sortie' if op['sens'] == 'debit' else 'Entrée', op['montant']]
+         for m in analyse['mois'] for op in m['operations']],
+        [16, 12, 46, 34, 10, 14])
+
+    # --- Lignes ajoutées à la main -----------------------------------------
+    if manuelles:
+        _feuille(
+            classeur, 'Lignes ajoutées',
+            ['Libellé', 'Sens', 'Montant mensuel (€)'],
+            [[l.get('libelle', ''),
+              'Sortie' if l.get('sens') == 'debit' else 'Entrée',
+              float(l['montant'])] for l in manuelles],
+            [40, 12, 22])
+
+    # --- Couverture des relevés --------------------------------------------
+    _feuille(
+        classeur, 'Relevés',
+        ['Fichier', 'Période couverte', 'Opérations', 'Lecture', 'Contrôle'],
+        [[d['nom'], d['periode'], d['nb_operations'], d['source'],
+          {'ok': 'Concordant', 'ecart': f"Écart {d['controle'].get('ecart')} €"}
+          .get(d.get('controle', {}).get('statut'), 'Non vérifiable')]
+         for d in analyse.get('detail_releves', [])],
+        [34, 26, 14, 24, 22])
+
+    fichier = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx')
+    fichier.close()
+    try:
+        classeur.save(fichier.name)
+        with open(fichier.name, 'rb') as f:
+            donnees = f.read()
+    finally:
+        if os.path.exists(fichier.name):
+            os.unlink(fichier.name)
+
+    nom = f"depenses_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+    reponse = HttpResponse(
+        donnees,
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    reponse['Content-Disposition'] = f'attachment; filename="{nom}"'
+    return reponse

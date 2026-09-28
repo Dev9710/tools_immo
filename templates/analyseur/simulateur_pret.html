@@ -53,11 +53,13 @@
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label class="form-label fw-bold">Revenus nets mensuels (€)</label>
-                                <input type="number" class="form-control form-control-lg" name="revenus_nets" min="0" step="100" required>
+                                <input type="number" class="form-control form-control-lg" name="revenus_nets" min="0" step="100" value="{{ revenus_mensuels|default_if_none:''|floatformat:0 }}" required>
+                                {% if revenus_mensuels %}<div class="form-text"><i class="bi bi-check-circle-fill text-success me-1"></i>Moyenne des entrées de vos relevés — ajustez si une partie n'est pas un revenu stable.</div>{% endif %}
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label fw-bold">Charges mensuelles (€)</label>
-                                <input type="number" class="form-control form-control-lg" name="charges_mensuelles" min="0" step="50" value="0">
+                                <input type="number" class="form-control form-control-lg" name="charges_mensuelles" min="0" step="50" value="{{ depenses_mensuelles|default:0|floatformat:0 }}">
+                                {% if depenses_mensuelles %}<div class="form-text"><i class="bi bi-check-circle-fill text-success me-1"></i>Repris de votre analyse de dépenses mensuelles.</div>{% endif %}
                             </div>
                         </div>
                         <div class="row">
