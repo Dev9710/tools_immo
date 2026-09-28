@@ -1,5 +1,6 @@
 # views.py - Version refactorisée avec templates
 from pathlib import Path
+from urllib.parse import urlencode
 
 from django.shortcuts import render, redirect
 from django.http import HttpResponse, JsonResponse
@@ -9,6 +10,7 @@ from django.urls import reverse
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal, InvalidOperation
+import math
 import tempfile
 import os
 import re
@@ -2250,10 +2252,13 @@ def export_depenses_excel(request):
 
 
 def _nombre_saisi(valeur, defaut):
+    """Nombre saisi par l'utilisateur, ou `defaut` si la saisie est illisible ou non finie
+    (nan/inf) : ces valeurs feraient planter ou fausseraient les calculs en aval."""
     try:
-        return float(str(valeur).replace(',', '.').replace(' ', ''))
+        v = float(str(valeur).replace(',', '.').replace(' ', ''))
     except (TypeError, ValueError):
         return defaut
+    return v if math.isfinite(v) else defaut
 
 
 def _montant_positif(valeur):
@@ -2272,6 +2277,12 @@ def _duree_saisie(valeur, defaut):
     mensualité : on revient alors à la durée par défaut."""
     v = _nombre_saisi(valeur, defaut)
     return int(v) if 5 <= v <= 30 else defaut
+
+
+def _taux_saisi(valeur, defaut):
+    """Un taux négatif n'a pas de sens : on revient à la valeur par défaut."""
+    v = _nombre_saisi(valeur, defaut)
+    return v if v >= 0 else defaut
 
 
 def _profil_par_defaut():
@@ -2314,19 +2325,22 @@ def biens_financables(request):
                 'charges': _montant_positif(p.get('charges')),
                 'apport': _montant_positif(p.get('apport')),
                 'duree': _duree_saisie(p.get('duree'), d.duree),
-                'taux_nominal': _nombre_saisi(p.get('taux_nominal'), d.taux_nominal),
-                'taux_assurance': _nombre_saisi(p.get('taux_assurance'), d.taux_assurance),
+                'taux_nominal': _taux_saisi(p.get('taux_nominal'), d.taux_nominal),
+                'taux_assurance': _taux_saisi(p.get('taux_assurance'), d.taux_assurance),
                 'primo': p.get('primo') == 'on',
                 'nb_adultes': _entier_positif(p.get('nb_adultes'), 2),
                 'nb_enfants': _entier_positif(p.get('nb_enfants'), 0),
             }
-        return redirect(f"{reverse('biens_financables')}?ville={request.POST.get('ville', '')}")
+        query = urlencode({'ville': request.POST.get('ville', '')})
+        return redirect(f"{reverse('biens_financables')}?{query}")
 
     profil, source = _profil_biens(request.session)
     contexte = {'racine': racine, 'villes': liste or [], 'dossier_introuvable': liste is None,
                 'profil': profil, 'source_profil': source}
     slugs = {v['slug'] for v in liste or []}
-    slug = request.GET.get('ville') or (liste[0]['slug'] if liste else None)
+    slug = request.GET.get('ville')
+    if slug not in slugs:   # ville absente (faute de frappe ou tentative de path traversal) :
+        slug = liste[0]['slug'] if liste else None    # on retombe sur la première ville connue
     if slug in slugs:   # jamais de chemin construit à partir d'une valeur non listée
         contexte['ville'] = next(v for v in liste if v['slug'] == slug)
         contexte['analyse'] = biens_gino.analyser_ville(racine / slug, profil,

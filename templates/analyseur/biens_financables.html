@@ -1,5 +1,5 @@
 {% extends 'analyseur/base.html' %}
-{% load humanize %}
+{% load humanize l10n %}
 {% block title %}Biens finançables{% endblock %}
 {% block content %}
 <style>
@@ -60,7 +60,7 @@
         <div class="col-6 col-md-2"><label class="form-label small" for="apport">Apport</label>
           <input class="form-control" id="apport" name="apport" type="number" step="1000" value="{{ profil.apport|floatformat:0 }}"></div>
         <div class="col-6 col-md-1"><label class="form-label small" for="duree">Durée (ans)</label>
-          <input class="form-control" id="duree" name="duree" type="number" min="5" max="27" value="{{ profil.duree }}"></div>
+          <input class="form-control" id="duree" name="duree" type="number" min="5" max="30" value="{{ profil.duree }}"></div>
         <div class="col-6 col-md-1"><label class="form-label small" for="taux_nominal">Taux %</label>
           <input class="form-control" id="taux_nominal" name="taux_nominal" type="number" step="0.01" value="{{ profil.taux_nominal|stringformat:'.2f' }}"></div>
         <div class="col-6 col-md-1"><label class="form-label small" for="taux_assurance">Assurance %</label>
@@ -78,12 +78,20 @@
     </div>
   </div>
 
-  {% if analyse %}
+  {% if analyse.resume.total == 0 %}
+  <div class="alert alert-info">
+    <p class="fw-bold mb-1"><i class="bi bi-info-circle"></i> Aucun bien trouvé pour {{ ville.nom }}.</p>
+    <ul class="mb-0">
+      <li>Lance Gino sur une agence de cette ville pour récupérer des biens.</li>
+      <li>Reviens ensuite sur cette page : elle se mettra à jour toute seule.</li>
+    </ul>
+  </div>
+  {% elif analyse %}
   <div class="row g-2 mb-3 text-center">
     <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="h4 mb-0 text-success">{{ analyse.resume.financable }}</div><div class="small">finançables</div></div></div>
     <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="h4 mb-0 text-warning">{{ analyse.resume.limite }}</div><div class="small">limites</div></div></div>
     <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="h4 mb-0 text-danger">{{ analyse.resume.hors_budget }}</div><div class="small">hors budget</div></div></div>
-    <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="h4 mb-0">{% if analyse.resume.prix_max %}{{ analyse.resume.prix_max|floatformat:0|intcomma }} €{% else %}—{% endif %}</div><div class="small">prix maximum finançable</div></div></div>
+    <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="h4 mb-0">{% if analyse.resume.prix_max %}{{ analyse.resume.prix_max|floatformat:0|intcomma }} €{% else %}—{% endif %}</div><div class="small">prix maximum finançable</div><div class="small text-muted">calculé sur tes revenus actuels, hors reste à vivre</div></div></div>
   </div>
 
   <ul class="small text-muted mb-3">
@@ -124,7 +132,7 @@
       </tr></thead>
       <tbody>
       {% for b in analyse.biens %}
-      <tr class="bien" data-verdict="{{ b.verdict|default:'' }}" data-type="{{ b.type }}" data-surface="{{ b.surface|default:0 }}" data-pieces="{{ b.pieces|default:0 }}" data-chambres="{{ b.chambres|default:0 }}" data-prix="{{ b.prix|default:0 }}" data-mensualite="{{ b.mensualite|default:0 }}" data-endettement="{{ b.endettement|default:0 }}" data-ecart="{{ b.ecart_m2|default_if_none:9 }}" data-ordre="{{ forloop.counter }}">
+      <tr class="bien" data-verdict="{{ b.verdict|default:'' }}" data-type="{{ b.type }}" data-surface="{{ b.surface|default:0|unlocalize }}" data-pieces="{{ b.pieces|default:0 }}" data-chambres="{{ b.chambres|default:0 }}" data-prix="{{ b.prix|default:0|unlocalize }}" data-mensualite="{{ b.mensualite|default:0|unlocalize }}" data-endettement="{{ b.endettement|default:0|unlocalize }}" data-ecart="{{ b.ecart_m2|default_if_none:9|unlocalize }}" data-ordre="{{ forloop.counter }}">
         <td>{% include 'analyseur/_verdict.html' %}</td>
         <td>{{ b.type }}{% if b.pieces %} {{ b.pieces }} p.{% endif %} · {{ b.lieu }}{% if b.surface %} · {{ b.surface|floatformat:0 }} m²{% endif %}{% if b.chambres %} · {{ b.chambres }} ch.{% endif %}{% if b.neuf %} <span class="badge bg-info text-dark">neuf</span>{% endif %}</td>
         <td class="text-end font-monospace">{% if b.prix %}{{ b.prix|floatformat:0|intcomma }} €{% else %}<span class="text-muted">prix non affiché</span>{% endif %}</td>
@@ -142,7 +150,7 @@
 
   <div class="d-md-none">
     {% for b in analyse.biens %}
-    <div class="card mb-2 bien" data-verdict="{{ b.verdict|default:'' }}" data-type="{{ b.type }}" data-surface="{{ b.surface|default:0 }}" data-pieces="{{ b.pieces|default:0 }}" data-chambres="{{ b.chambres|default:0 }}">
+    <div class="card mb-2 bien" data-verdict="{{ b.verdict|default:'' }}" data-type="{{ b.type }}" data-surface="{{ b.surface|default:0|unlocalize }}" data-pieces="{{ b.pieces|default:0 }}" data-chambres="{{ b.chambres|default:0 }}">
       <div class="card-body py-2">
         <div class="d-flex justify-content-between">{% include 'analyseur/_verdict.html' %}{% include 'analyseur/_dpe.html' %}</div>
         <div class="fw-bold mt-1">{{ b.type }}{% if b.pieces %} {{ b.pieces }} p.{% endif %} · {{ b.lieu }}{% if b.surface %} · {{ b.surface|floatformat:0 }} m²{% endif %}</div>

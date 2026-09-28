@@ -30,10 +30,10 @@
                 <i class="bi bi-bank"></i> {% block nav_title %}Suite Immobilière Banque Postale{% endblock %}
             </a>
             <div class="navbar-nav ms-auto">
-                {% block nav_buttons %}
                 <a class="nav-link text-dark" href="{% url 'biens_financables' %}">
                     <i class="bi bi-house-check"></i> Biens finançables
                 </a>
+                {% block nav_buttons %}
                 <a class="nav-link text-dark" href="{% url 'upload_releve' %}">
                     <i class="bi bi-cloud-upload"></i> Analyser un relevé
                 </a>

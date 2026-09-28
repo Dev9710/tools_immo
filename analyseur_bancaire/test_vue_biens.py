@@ -36,10 +36,14 @@ class PageBiensTests(SimpleTestCase):
         self.assertContains(r, "ta saisie")
         self.assertEqual(self.client.session["profil_biens"]["taux_nominal"], 3.33)
 
-    def test_ville_inconnue_ou_malveillante(self):
+    def test_ville_inconnue_retombe_sur_la_premiere_ville(self):
+        """Une ville absente de la liste (faute de frappe ou tentative de path traversal) ne
+        sert jamais à construire un chemin : on retombe sur la première ville connue, pour que
+        le sélecteur affiché et la liste chargée restent cohérents."""
         r = self.client.get(reverse("biens_financables"), {"ville": "../../etc"})
         self.assertEqual(r.status_code, 200)
-        self.assertNotIn("analyse", r.context)
+        self.assertEqual(r.context["ville"]["slug"], "fresnes")
+        self.assertNotContains(r, "../../etc")
 
     @override_settings(AGENCE_IMMO_DIR=TMP / "absent")
     def test_dossier_gino_introuvable(self):
@@ -64,6 +68,69 @@ class PageBiensTests(SimpleTestCase):
         self.assertEqual(p["apport"], 0.0)
         self.assertEqual(p["nb_adultes"], 2)
         self.assertEqual(p["nb_enfants"], 0)
+
+    def test_valeurs_non_finies_repli_sur_defaut(self):
+        """nan/inf saisis (via une saisie manuelle de l'URL ou du formulaire) ne doivent
+        jamais atteindre le calcul de mensualité ni s'afficher tels quels."""
+        r = self.client.post(reverse("biens_financables"),
+                              {**PROFIL, "nb_adultes": "inf", "taux_nominal": "nan"}, follow=True)
+        self.assertEqual(r.status_code, 200)
+        self.assertNotContains(r, 'value="nan"')
+        self.assertNotContains(r, 'value="inf"')
+        p = self.client.session["profil_biens"]
+        self.assertEqual(p["nb_adultes"], 2)
+        self.assertEqual(p["taux_nominal"], 3.33)
+
+    def test_taux_negatif_repli_sur_defaut(self):
+        r = self.client.post(reverse("biens_financables"),
+                              {**PROFIL, "taux_nominal": "-1", "taux_assurance": "-0.5"},
+                              follow=True)
+        self.assertEqual(r.status_code, 200)
+        p = self.client.session["profil_biens"]
+        self.assertEqual(p["taux_nominal"], 3.33)
+        self.assertEqual(p["taux_assurance"], 0.2)
+
+    def test_donnees_numeriques_non_localisees_dans_les_data_attributes(self):
+        """Les data-* numériques doivent rester en point décimal (format JS), jamais en
+        virgule française, sous peine de fausser le tri et les filtres côté client."""
+        r = self.client.get(reverse("biens_financables"), {"ville": "fresnes"})
+        self.assertContains(r, 'data-ecart="-0.')
+        self.assertNotContains(r, 'data-surface="82,0"')
+        self.assertNotContains(r, 'data-prix="209000,0"')
+
+    def test_duree_max_30_ans(self):
+        r = self.client.get(reverse("biens_financables"), {"ville": "fresnes"})
+        self.assertContains(r, 'max="30"')
+        self.assertNotContains(r, 'max="27"')
+
+    def test_note_prix_max_hors_reste_a_vivre(self):
+        r = self.client.post(reverse("biens_financables"), PROFIL, follow=True)
+        self.assertContains(r, "hors reste à vivre")
+
+    def test_ville_sans_bien_affiche_un_etat_vide(self):
+        vide = TMP / "vide"
+        vide.mkdir(exist_ok=True)
+        (vide / "_gino_agence.json").write_text(json.dumps([
+            {"type": "Parking", "lieu": "Vide", "prix": "10 000 €", "url": "https://ex/parking"},
+        ]), encoding="utf-8")
+        r = self.client.get(reverse("biens_financables"), {"ville": "vide"})
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, "Aucun bien")
+        self.assertNotContains(r, "<table")
+
+
+class NavigationTests(SimpleTestCase):
+    """Le lien « Biens finançables » doit être visible depuis toutes les pages, y compris
+    celles qui redéfinissent le bloc nav_buttons."""
+
+    def test_lien_biens_financables_visible_partout(self):
+        for nom_url in ("simulateur_pret", "dashboard", "charges_fixes", "upload_releve"):
+            r = self.client.get(reverse(nom_url))
+            self.assertContains(r, "Biens finançables", msg_prefix=nom_url)
+
+    def test_lien_biens_financables_apres_simulation(self):
+        r = self.client.get(reverse("simulateur_pret"))
+        self.assertContains(r, "Voir les biens à ta portée")
 
 
 class VraiesDonneesTests(SimpleTestCase):
