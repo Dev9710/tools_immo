@@ -17,7 +17,7 @@ Le venv est à la racine du projet (Windows) :
 
 ```bash
 venv/Scripts/python.exe manage.py runserver      # http://127.0.0.1:8000/
-venv/Scripts/python.exe manage.py test           # aucun test réel pour l'instant (tests.py est un stub)
+venv/Scripts/python.exe manage.py test           # tests de analyseur_bancaire (simulateur, biens_gino, page biens)
 venv/Scripts/pip.exe install -r requirements.txt
 ```
 
@@ -212,6 +212,20 @@ POST JSON ou form, champ `mode` :
 - `mensualite` : mensualité + tableau d'amortissement, **n'écrit rien en session**.
 
 Réponse toujours `JsonResponse({'success': bool, ...})`, jamais un code HTTP d'erreur.
+
+### Biens finançables (lecture des résultats de Gino)
+
+- Page `biens-financables/` : les biens relevés par Gino (projet **séparé** agence-immo,
+  futur SaaS) pour une ville, avec frais de notaire, mensualité, endettement et verdict
+  (≤ 35 % finançable, ≤ 40 % limite, au-delà hors budget).
+- Tout ce qui dépend du format de Gino vit dans `analyseur_bancaire/biens_gino.py` (sans
+  Django). tools_immo **lit seulement** `<ville>/_gino_*.json` — tous les biens, pas les
+  onglets Excel déjà filtrés. `criteres.json` n'est pas utilisé.
+- Dossier lu : setting `AGENCE_IMMO_DIR` (variable d'environnement du même nom).
+- Barèmes (taux, assurance, frais de notaire dont primo-accédant 7,5 %) : septembre 2026,
+  sources en commentaire en tête de `views.py`. À mettre à jour quand les taux bougent.
+- Tests : `venv/Scripts/python.exe manage.py test analyseur_bancaire`. Valeur de contrôle
+  officielle : 200 000 € · 20 ans · 3,53 % tout compris → ≈ 1 163 €/mois.
 
 ### Templates
 
