@@ -154,3 +154,17 @@ class DoublonsTests(SimpleTestCase):
                                              bien(prix=300000.0, surface=100.0),
                                              bien(prix=None), bien(surface=None)]), 2500.0)
         self.assertIsNone(bg.mediane_prix_m2([bien(prix=None)]))
+
+    def test_completion_preserve_zero(self):
+        # Legitimate 0 (studio) should not be overwritten by duplicate's 1
+        g = bg.regrouper_doublons([
+            bien(chambres=0, agence="A", url="1"),
+            bien(chambres=1, agence="B", url="2"),
+        ])
+        self.assertEqual(g[0]["chambres"], 0)
+        # Missing (None) should be filled from duplicate
+        g = bg.regrouper_doublons([
+            bien(chambres=None, agence="A", url="1"),
+            bien(chambres=1, agence="B", url="2"),
+        ])
+        self.assertEqual(g[0]["chambres"], 1)

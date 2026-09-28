@@ -151,7 +151,7 @@ def regrouper_doublons(biens):
                 g["agences"].append(b["agence"])
                 g["annonces"].append({"agence": b["agence"], "url": b["url"]})
                 for k in ("annee", "dpe", "pieces", "chambres"):
-                    if not g[k] and b[k]:
+                    if g[k] in (None, "") and b[k] not in (None, ""):
                         g[k] = b[k]
                 break
         else:
