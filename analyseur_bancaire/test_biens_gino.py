@@ -17,6 +17,14 @@ def ville(dossier, fichiers, stan=None):
     return dossier
 
 
+def bien(**k):
+    base = {"type": "Appartement", "type_source": "Appartement", "lieu": "Fresnes",
+            "pieces": 4, "chambres": 3, "annee": None, "dpe": "", "surface": 80.0,
+            "prix": 250000.0, "url": "u", "agence": "A", "statut": ""}
+    base.update(k)
+    return base
+
+
 class LectureNombresTests(SimpleTestCase):
     def test_formats_reels_de_gino(self):
         self.assertEqual(bg.nombre("254 000 €"), 254000.0)
@@ -112,3 +120,37 @@ class ChargerVilleTests(SimpleTestCase):
         self.assertEqual(len(r["biens"]), 1)
         # Sans nom valide dans Stan, on doit utiliser le nom du fichier
         self.assertEqual(r["biens"][0]["agence"], "Lesprix")
+
+
+class DoublonsTests(SimpleTestCase):
+    def test_cas_reels_regroupes(self):
+        # Champigny : même T4 chez Orpi Mairie (80,5 m²) et Nestenn (80 m²) à 254 000 €.
+        # Fresnes : même 5 pièces chez Primo (104,85 m²) et L'Adresse (104,23 m²) à 273 000 €.
+        g = bg.regrouper_doublons([
+            bien(lieu="Champigny-sur-Marne", surface=80.5, prix=254000.0, agence="Orpi Mairie", url="o"),
+            bien(lieu="Champigny-sur-Marne", surface=80.0, prix=254000.0, agence="Nestenn",
+                 url="n", annee=1970, dpe="D"),
+            bien(surface=104.85, prix=273000.0, agence="Primo", url="p"),
+            bien(surface=104.23, prix=273000.0, agence="L'Adresse", url="a"),
+        ])
+        self.assertEqual(len(g), 2)
+        self.assertEqual(g[0]["agences"], ["Orpi Mairie", "Nestenn"])
+        self.assertEqual([a["url"] for a in g[0]["annonces"]], ["o", "n"])
+        self.assertEqual((g[0]["annee"], g[0]["dpe"]), (1970, "D"))   # complétés
+
+    def test_pas_regroupes(self):
+        g = bg.regrouper_doublons([
+            bien(agence="A", url="1"),
+            bien(agence="A", url="2"),                    # même agence : deux annonces distinctes
+            bien(agence="B", url="3", prix=260000.0),     # prix à 4 % d'écart
+            bien(agence="C", url="4", surface=85.0),      # 5 m² d'écart
+            bien(agence="D", url="5", type="Maison"),
+            bien(agence="E", url="6", surface=None),      # surface inconnue : on ne devine pas
+        ])
+        self.assertEqual(len(g), 6)
+
+    def test_mediane(self):
+        self.assertEqual(bg.mediane_prix_m2([bien(prix=200000.0, surface=100.0),
+                                             bien(prix=300000.0, surface=100.0),
+                                             bien(prix=None), bien(surface=None)]), 2500.0)
+        self.assertIsNone(bg.mediane_prix_m2([bien(prix=None)]))

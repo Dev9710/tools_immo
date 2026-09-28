@@ -130,3 +130,36 @@ def charger_ville(dossier):
             })
     return {"biens": biens, "ignores": ignores, "masques": masques,
             "date_releve": datetime.fromtimestamp(max(dates)).date() if dates else None}
+
+
+def meme_bien(a, b):
+    """Même bien confié à deux agences : type, ville, prix à 1 %, surface à 1 m²."""
+    if a["type"] != b["type"] or a["lieu"].lower() != b["lieu"].lower():
+        return False
+    if not (a["prix"] and b["prix"]) or abs(a["prix"] - b["prix"]) > 0.01 * max(a["prix"], b["prix"]):
+        return False
+    if a["surface"] is None or b["surface"] is None:
+        return False
+    return abs(a["surface"] - b["surface"]) <= 1.0
+
+
+def regrouper_doublons(biens):
+    groupes = []
+    for b in biens:
+        for g in groupes:
+            if b["agence"] not in g["agences"] and meme_bien(g, b):
+                g["agences"].append(b["agence"])
+                g["annonces"].append({"agence": b["agence"], "url": b["url"]})
+                for k in ("annee", "dpe", "pieces", "chambres"):
+                    if not g[k] and b[k]:
+                        g[k] = b[k]
+                break
+        else:
+            groupes.append({**b, "agences": [b["agence"]],
+                            "annonces": [{"agence": b["agence"], "url": b["url"]}]})
+    return groupes
+
+
+def mediane_prix_m2(biens):
+    vals = [b["prix"] / b["surface"] for b in biens if b["prix"] and b["surface"]]
+    return statistics.median(vals) if vals else None
