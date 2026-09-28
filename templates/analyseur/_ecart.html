@@ -1,0 +1,1 @@
+{% if b.ecart_m2 is not None %}{% if b.ecart_m2 < 0 %}<span class="text-success"><i class="bi bi-arrow-down"></i> {% widthratio b.ecart_m2 1 -100 %} % sous la ville</span>{% else %}<span class="text-muted"><i class="bi bi-arrow-up"></i> {% widthratio b.ecart_m2 1 100 %} %</span>{% endif %}{% else %}<span class="text-muted">—</span>{% endif %}

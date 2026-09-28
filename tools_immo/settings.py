@@ -31,6 +31,7 @@ ALLOWED_HOSTS = os.environ.get(
 # SessionMiddleware suffit sans l'app « sessions ».
 INSTALLED_APPS = [
     'django.contrib.staticfiles',
+    'django.contrib.humanize',
     'analyseur_bancaire',
 ]
 
@@ -92,3 +93,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Taille max des fichiers uploadés (10 Mo)
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+
+# Résultats de Gino (projet séparé agence-immo). tools_immo les LIT seulement.
+AGENCE_IMMO_DIR = Path(os.environ.get(
+    'AGENCE_IMMO_DIR', BASE_DIR.parent / 'tools' / 'scraping' / 'agence-immo'))

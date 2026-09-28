@@ -1,7 +1,11 @@
 # views.py - Version refactorisée avec templates
+from pathlib import Path
+
 from django.shortcuts import render, redirect
 from django.http import HttpResponse, JsonResponse
 from django.template.loader import render_to_string
+from django.conf import settings
+from django.urls import reverse
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal, InvalidOperation
@@ -9,6 +13,8 @@ import tempfile
 import os
 import re
 import json
+
+from . import biens_gino
 
 # Taux nominaux hors assurance, profil « moyen » — septembre 2026.
 # Moyenne Meilleurtaux (01/09/2026 : 3,28 / 3,40 / 3,50 sur 15/20/25 ans) et Pretto
@@ -2241,3 +2247,70 @@ def export_depenses_excel(request):
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     reponse['Content-Disposition'] = f'attachment; filename="{nom}"'
     return reponse
+
+
+def _nombre_saisi(valeur, defaut):
+    try:
+        return float(str(valeur).replace(',', '.').replace(' ', ''))
+    except (TypeError, ValueError):
+        return defaut
+
+
+def _profil_par_defaut():
+    return biens_gino.Profil(
+        duree=20,
+        taux_nominal=TAUX_ACTUELS['regions']['ile_de_france']['20'] + TAUX_ACTUELS['profils']['moyen'],
+        taux_assurance=TAUX_ACTUELS['assurance']['30_45'])
+
+
+def _profil_biens(session):
+    """Profil de la page : saisie > simulation > défauts. Renvoie (profil, source)."""
+    if session.get('profil_biens'):
+        return biens_gino.Profil(**session['profil_biens']), 'saisie'
+    d = _profil_par_defaut()
+    if session.get('revenus_nets'):
+        return biens_gino.Profil(
+            revenus=session['revenus_nets'], charges=session.get('charges_fixes', 0),
+            apport=session.get('apport', 0), duree=session.get('duree', d.duree),
+            taux_nominal=session.get('taux_nominal', d.taux_nominal),
+            taux_assurance=session.get('taux_assurance', d.taux_assurance),
+            primo=session.get('primo_accedant', False),
+            nb_adultes=session.get('nb_adultes', 2), nb_enfants=session.get('nb_enfants', 0)
+        ), 'simulation'
+    return d, 'defaut'
+
+
+def biens_financables(request):
+    """Biens relevés par Gino, avec le coût mensuel et le verdict de financement de chacun."""
+    racine = Path(settings.AGENCE_IMMO_DIR)
+    liste = biens_gino.villes(racine)
+
+    if request.method == 'POST':
+        if request.POST.get('action') == 'reprendre':
+            request.session.pop('profil_biens', None)
+        else:
+            d = _profil_par_defaut()
+            p = request.POST
+            request.session['profil_biens'] = {
+                'revenus': _nombre_saisi(p.get('revenus'), 0.0),
+                'charges': _nombre_saisi(p.get('charges'), 0.0),
+                'apport': _nombre_saisi(p.get('apport'), 0.0),
+                'duree': int(_nombre_saisi(p.get('duree'), d.duree)),
+                'taux_nominal': _nombre_saisi(p.get('taux_nominal'), d.taux_nominal),
+                'taux_assurance': _nombre_saisi(p.get('taux_assurance'), d.taux_assurance),
+                'primo': p.get('primo') == 'on',
+                'nb_adultes': int(_nombre_saisi(p.get('nb_adultes'), 2)),
+                'nb_enfants': int(_nombre_saisi(p.get('nb_enfants'), 0)),
+            }
+        return redirect(f"{reverse('biens_financables')}?ville={request.POST.get('ville', '')}")
+
+    profil, source = _profil_biens(request.session)
+    contexte = {'racine': racine, 'villes': liste or [], 'dossier_introuvable': liste is None,
+                'profil': profil, 'source_profil': source}
+    slugs = {v['slug'] for v in liste or []}
+    slug = request.GET.get('ville') or (liste[0]['slug'] if liste else None)
+    if slug in slugs:   # jamais de chemin construit à partir d'une valeur non listée
+        contexte['ville'] = next(v for v in liste if v['slug'] == slug)
+        contexte['analyse'] = biens_gino.analyser_ville(racine / slug, profil,
+                                                        SimulateurPretImmobilier())
+    return render(request, 'analyseur/biens_financables.html', contexte)

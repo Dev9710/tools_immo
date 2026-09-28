@@ -13,4 +13,5 @@ urlpatterns = [
     path('dashboard/', views.dashboard_dossier, name='dashboard'),
     path('export-dossier-pdf/', views.export_dossier_pdf,
          name='export_dossier_pdf'),
+    path('biens-financables/', views.biens_financables, name='biens_financables'),
 ]
