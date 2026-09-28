@@ -5,6 +5,9 @@ from pathlib import Path
 from django.test import SimpleTestCase
 
 from . import biens_gino as bg
+from .views import SimulateurPretImmobilier
+
+SIM = SimulateurPretImmobilier()
 
 
 def ville(dossier, fichiers, stan=None):
@@ -23,6 +26,13 @@ def bien(**k):
             "prix": 250000.0, "url": "u", "agence": "A", "statut": ""}
     base.update(k)
     return base
+
+
+def profil(**k):
+    p = dict(revenus=4000.0, charges=300.0, apport=0.0, duree=20, taux_nominal=3.33,
+             taux_assurance=0.20, primo=False, nb_adultes=2, nb_enfants=0)
+    p.update(k)
+    return bg.Profil(**p)
 
 
 class LectureNombresTests(SimpleTestCase):
@@ -168,3 +178,59 @@ class DoublonsTests(SimpleTestCase):
             bien(chambres=1, agence="B", url="2"),
         ])
         self.assertEqual(g[0]["chambres"], 1)
+
+
+class FinancementTests(SimpleTestCase):
+    def test_verdicts_aux_seuils(self):
+        self.assertEqual(bg.verdict(35.0), "financable")
+        self.assertEqual(bg.verdict(35.1), "limite")
+        self.assertEqual(bg.verdict(40.0), "limite")
+        self.assertEqual(bg.verdict(40.1), "hors_budget")
+        self.assertEqual(bg.verdict(20.0, "danger"), "hors_budget")
+
+    def test_neuf(self):
+        self.assertTrue(bg.est_neuf(bien(annee=2026)))
+        self.assertTrue(bg.est_neuf(bien(type_source="Appartement neuf (VEFA)")))
+        self.assertFalse(bg.est_neuf(bien(annee=1970)))
+        self.assertFalse(bg.est_neuf(bien(annee=None)))
+
+    def test_evaluer_ancien_primo(self):
+        r = bg.evaluer(bien(prix=200000.0, surface=80.0, dpe="G"), profil(primo=True), 2000.0, SIM)
+        self.assertEqual(r["frais_notaire"], 15000.0)                  # 7,5 %
+        self.assertEqual(r["emprunt"], 215000.0)
+        self.assertAlmostEqual(r["mensualite"], 1250.2, delta=1)
+        self.assertAlmostEqual(r["endettement"], 38.8, delta=0.2)      # (300 + 1250) / 4000
+        self.assertEqual(r["verdict"], "limite")
+        self.assertTrue(r["alerte_dpe"])
+        self.assertAlmostEqual(r["ecart_m2"], 0.25)                    # 2 500 €/m² vs 2 000
+
+    def test_apport_superieur_au_cout(self):
+        r = bg.evaluer(bien(prix=100000.0), profil(apport=200000.0), None, SIM)
+        self.assertEqual((r["emprunt"], r["mensualite"]), (0.0, 0.0))
+        self.assertEqual(r["verdict"], "financable")
+        self.assertIsNone(r["ecart_m2"])
+
+    def test_sans_prix_ou_sans_revenus(self):
+        self.assertIsNone(bg.evaluer(bien(prix=None), profil(), 2000.0, SIM)["verdict"])
+        r = bg.evaluer(bien(), profil(revenus=0.0), 2000.0, SIM)
+        self.assertIsNone(r["verdict"])
+        self.assertIsNone(r["mensualite"])
+
+    def test_prix_max(self):
+        p = bg.prix_max_financable(profil(apport=20000.0), SIM)
+        # mensualité max 1 100 € → ~189 000 € empruntables + 20 000 d'apport, ÷ 1,08
+        self.assertTrue(190000 < p < 196000, p)
+        self.assertIsNone(bg.prix_max_financable(profil(revenus=0.0), SIM))
+
+    def test_analyser_ville_trie_et_resume(self):
+        d = ville(Path(tempfile.mkdtemp()) / "fresnes", {"_gino_a.json": [
+            {"type": "Maison", "lieu": "Fresnes", "surface": "100 m²", "prix": "600 000 €", "url": "cher"},
+            {"type": "Appartement", "lieu": "Fresnes", "surface": "80 m²", "prix": "180 000 €", "url": "ok"},
+            {"type": "Appartement", "lieu": "Fresnes", "surface": "70 m²", "prix": "", "url": "sans-prix"},
+        ]})
+        # apport 50 000 € : le 180 000 € ressort à ~28 % (sans apport il serait « limite », ~36 %)
+        r = bg.analyser_ville(d, profil(apport=50000.0), SIM)
+        self.assertEqual([b["url"] for b in r["biens"]], ["ok", "cher", "sans-prix"])
+        self.assertEqual((r["resume"]["financable"], r["resume"]["hors_budget"], r["resume"]["total"]),
+                         (1, 1, 3))
+        self.assertIsNotNone(r["resume"]["prix_max"])

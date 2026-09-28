@@ -11,6 +11,7 @@ import json
 import re
 import statistics
 import unicodedata
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -163,3 +164,89 @@ def regrouper_doublons(biens):
 def mediane_prix_m2(biens):
     vals = [b["prix"] / b["surface"] for b in biens if b["prix"] and b["surface"]]
     return statistics.median(vals) if vals else None
+
+
+SEUIL_FINANCABLE = 35.0     # règle HCSF, assurance comprise
+SEUIL_LIMITE = 40.0         # au-delà, même une dérogation est improbable
+ANNEE_NEUF = 2025
+MOTS_NEUF = ("neuf", "vefa", "livraison")
+ORDRE_VERDICT = {"financable": 0, "limite": 1, "hors_budget": 2, None: 3}
+
+
+@dataclass
+class Profil:
+    revenus: float = 0.0
+    charges: float = 0.0
+    apport: float = 0.0
+    duree: int = 20
+    taux_nominal: float = 0.0
+    taux_assurance: float = 0.0
+    primo: bool = False
+    nb_adultes: int = 2
+    nb_enfants: int = 0
+
+
+def est_neuf(bien):
+    if bien.get("annee") and bien["annee"] >= ANNEE_NEUF:
+        return True
+    return any(m in _sans_accents(bien.get("type_source", "")) for m in MOTS_NEUF)
+
+
+def verdict(endettement, statut_reste_a_vivre="OK"):
+    if statut_reste_a_vivre == "danger" or endettement > SEUIL_LIMITE:
+        return "hors_budget"
+    if endettement > SEUIL_FINANCABLE:
+        return "limite"
+    return "financable"
+
+
+def _cle_notaire(neuf, profil):
+    return "neuf" if neuf else ("ancien_primo" if profil.primo else "ancien")
+
+
+def evaluer(bien, profil, mediane, sim):
+    r = dict(bien)
+    r["neuf"] = est_neuf(bien)
+    r["alerte_dpe"] = bien["dpe"] in ("F", "G")
+    r["ecart_m2"] = (round(bien["prix"] / bien["surface"] / mediane - 1, 3)
+                     if bien["prix"] and bien["surface"] and mediane else None)
+    r.update(frais_notaire=None, emprunt=None, mensualite=None, endettement=None, verdict=None)
+    if not bien["prix"] or profil.revenus <= 0:
+        return r
+    frais = sim.calculer_frais_notaire(bien["prix"], _cle_notaire(r["neuf"], profil))
+    emprunt = max(0.0, bien["prix"] + frais - profil.apport)
+    mens = (sim.calculer_mensualites(emprunt, profil.duree, profil.taux_nominal,
+                                     profil.taux_assurance)["mensualite"] if emprunt > 0 else 0.0)
+    endettement = round((profil.charges + mens) / profil.revenus * 100, 1)
+    rav = sim.calculer_reste_a_vivre(profil.revenus, profil.charges + mens,
+                                     profil.nb_adultes, profil.nb_enfants)
+    r.update(frais_notaire=frais, emprunt=round(emprunt, 2), mensualite=mens,
+             endettement=endettement, verdict=verdict(endettement, rav["statut"]))
+    return r
+
+
+def prix_max_financable(profil, sim):
+    """Prix d'un bien ancien au-delà duquel l'endettement dépasserait 35 %."""
+    if profil.revenus <= 0:
+        return None
+    mens_max = max(0.0, profil.revenus * SEUIL_FINANCABLE / 100 - profil.charges)
+    n = profil.duree * 12
+    t = (profil.taux_nominal + profil.taux_assurance) / 100 / 12
+    emprunt = mens_max * n if t == 0 else mens_max * (1 - (1 + t) ** -n) / t
+    taux_notaire = sim.calculer_frais_notaire(1.0, _cle_notaire(False, profil))
+    return round((emprunt + profil.apport) / (1 + taux_notaire), -2)
+
+
+def analyser_ville(dossier, profil, sim):
+    lu = charger_ville(dossier)
+    biens = regrouper_doublons(lu["biens"])
+    mediane = mediane_prix_m2(biens)
+    ev = [evaluer(b, profil, mediane, sim) for b in biens]
+    ev.sort(key=lambda b: (ORDRE_VERDICT[b["verdict"]],
+                           b["ecart_m2"] if b["ecart_m2"] is not None else 9.0,
+                           b["prix"] or 0))
+    resume = {k: sum(1 for b in ev if b["verdict"] == k)
+              for k in ("financable", "limite", "hors_budget")}
+    resume.update(total=len(ev), prix_max=prix_max_financable(profil, sim))
+    return {"biens": ev, "resume": resume, "ignores": lu["ignores"], "masques": lu["masques"],
+            "date_releve": lu["date_releve"], "mediane": mediane}
