@@ -34,6 +34,11 @@ Stan & Gino restent un **projet séparé** (futur SaaS). Aucun code partagé : t
 - Nom de l'agence : déduit du nom de fichier, ou de `_stan.json` s'il existe.
 - Date du relevé : date de modification la plus récente des fichiers de la ville.
 - **Tout ce qui dépend de ce format vit dans un seul module** (`biens_gino.py`).
+- Les `_gino_*.json` contiennent **tous** les biens de l'agence (vérifié : Nestenn Champigny
+  40 biens, dont 1 seul passe `criteres.json`). C'est eux qu'on lit — pas les onglets Excel,
+  déjà filtrés.
+- **`criteres.json` n'est pas utilisé par la page** : il reste un réglage de Gino. Principe :
+  **tout afficher, le verdict fait la distinction entre le possible et l'impossible**.
 
 ## 4. Calcul, bien par bien
 
@@ -90,6 +95,7 @@ De haut en bas :
    défaut, à ajuster » + bouton **Recalculer**.
 3. **Chiffres clés** : nb finançables · nb limites · nb hors budget · prix maximum finançable.
 4. **Filtres** instantanés (sans rechargement) : verdict, type, surface, pièces, chambres min.
+   **Vides à l'ouverture** : tous les biens d'habitation s'affichent (voir § 3).
 5. **Liste** : tableau triable (desktop, en-tête collant ; tri par défaut : verdict puis prix
    au m² vs ville) ; **cartes sur mobile**.
    - Verdict : pastille **couleur + icône + mot** (jamais la couleur seule).
