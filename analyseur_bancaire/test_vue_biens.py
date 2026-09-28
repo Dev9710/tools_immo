@@ -46,6 +46,25 @@ class PageBiensTests(SimpleTestCase):
         r = self.client.get(reverse("biens_financables"))
         self.assertContains(r, "AGENCE_IMMO_DIR")
 
+    def test_duree_hors_bornes_repli_sur_defaut(self):
+        for duree in ("0", "-5", "40"):
+            r = self.client.post(reverse("biens_financables"), {**PROFIL, "duree": duree},
+                                  follow=True)
+            self.assertEqual(r.status_code, 200, duree)
+            self.assertEqual(self.client.session["profil_biens"]["duree"], 20, duree)
+
+    def test_montants_negatifs_ramenes_a_zero(self):
+        r = self.client.post(reverse("biens_financables"),
+                              {**PROFIL, "revenus": "-100", "charges": "-50", "apport": "-1000",
+                               "nb_adultes": "-2", "nb_enfants": "-1"}, follow=True)
+        self.assertEqual(r.status_code, 200)
+        p = self.client.session["profil_biens"]
+        self.assertEqual(p["revenus"], 0.0)
+        self.assertEqual(p["charges"], 0.0)
+        self.assertEqual(p["apport"], 0.0)
+        self.assertEqual(p["nb_adultes"], 2)
+        self.assertEqual(p["nb_enfants"], 0)
+
 
 class VraiesDonneesTests(SimpleTestCase):
     """Bout en bout sur les vrais fichiers de Gino, s'ils sont présents sur ce poste."""

@@ -110,7 +110,12 @@ def charger_ville(dossier):
         dates.append(f.stat().st_mtime)
         agence = _nom_agence(f, noms)
         for b in data:
-            if not isinstance(b, dict) or not b.get("url"):
+            if not isinstance(b, dict):
+                continue
+            url = str(b.get("url") or "").strip()
+            # Une url sans schéma http(s) (ex : « javascript:… ») n'est jamais rendue
+            # cliquable : le bien est écarté, comme s'il n'avait pas d'url du tout.
+            if not url or not url.lower().startswith(("http://", "https://")):
                 continue
             t = type_habitation(b.get("type"))
             if t is None:
@@ -126,7 +131,7 @@ def charger_ville(dossier):
                 "annee": entier(b.get("annee")),
                 "dpe": dpe if dpe in tuple("ABCDEFG") else "",
                 "surface": nombre(b.get("surface")), "prix": nombre(b.get("prix")),
-                "url": str(b["url"]).strip(), "agence": agence,
+                "url": url, "agence": agence,
                 "statut": str(b.get("statut") or ""),
             })
     return {"biens": biens, "ignores": ignores, "masques": masques,

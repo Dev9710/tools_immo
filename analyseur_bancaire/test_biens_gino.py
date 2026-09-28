@@ -96,8 +96,8 @@ class ChargerVilleTests(SimpleTestCase):
 
     def test_nom_agence_depuis_stan_sinon_fichier(self):
         d = ville(self.tmp / "champigny-sur-marne", {
-            "_gino_nestenn.json": [{"type": "Maison", "prix": 1, "url": "u1"}],
-            "_gino_primo-fresnes.json": [{"type": "Maison", "prix": 1, "url": "u2"}],
+            "_gino_nestenn.json": [{"type": "Maison", "prix": 1, "url": "https://ex/u1"}],
+            "_gino_primo-fresnes.json": [{"type": "Maison", "prix": 1, "url": "https://ex/u2"}],
         }, stan=[{"nom": "Nestenn Champigny-sur-Marne"}])
         agences = sorted(b["agence"] for b in bg.charger_ville(d)["biens"])
         self.assertEqual(agences, ["Nestenn Champigny-sur-Marne", "Primo Fresnes"])
@@ -120,6 +120,19 @@ class ChargerVilleTests(SimpleTestCase):
         r = bg.charger_ville(d)
         self.assertEqual(len(r["biens"]), 1)
         self.assertEqual(r["biens"][0]["url"], "https://ex/valid")
+
+    def test_url_sans_schema_http_rejetee(self):
+        """Une url sans schéma http(s) (ex : javascript:) n'est jamais rendue cliquable :
+        le bien est traité comme s'il n'avait pas d'url (même sort qu'un bien sans url)."""
+        d = ville(self.tmp / "xss", {
+            "_gino_test.json": [
+                {"type": "Maison", "prix": "100 000", "url": "javascript:alert(1)"},
+                {"type": "Maison", "prix": "200 000", "url": "  HTTPS://ex/valide  "},
+                {"type": "Maison", "prix": "300 000", "url": "data:text/html,pwn"},
+            ]
+        })
+        r = bg.charger_ville(d)
+        self.assertEqual([b["url"] for b in r["biens"]], ["HTTPS://ex/valide"])
 
     def test_robustesse_stan_nom_non_string(self):
         """Nom non-string dans _stan.json ne doit pas planter ; fallback au nom de fichier."""
@@ -239,13 +252,17 @@ class FinancementTests(SimpleTestCase):
 
     def test_analyser_ville_trie_et_resume(self):
         d = ville(Path(tempfile.mkdtemp()) / "fresnes", {"_gino_a.json": [
-            {"type": "Maison", "lieu": "Fresnes", "surface": "100 m²", "prix": "600 000 €", "url": "cher"},
-            {"type": "Appartement", "lieu": "Fresnes", "surface": "80 m²", "prix": "180 000 €", "url": "ok"},
-            {"type": "Appartement", "lieu": "Fresnes", "surface": "70 m²", "prix": "", "url": "sans-prix"},
+            {"type": "Maison", "lieu": "Fresnes", "surface": "100 m²", "prix": "600 000 €",
+             "url": "https://ex/cher"},
+            {"type": "Appartement", "lieu": "Fresnes", "surface": "80 m²", "prix": "180 000 €",
+             "url": "https://ex/ok"},
+            {"type": "Appartement", "lieu": "Fresnes", "surface": "70 m²", "prix": "",
+             "url": "https://ex/sans-prix"},
         ]})
         # apport 50 000 € : le 180 000 € ressort à ~28 % (sans apport il serait « limite », ~36 %)
         r = bg.analyser_ville(d, profil(apport=50000.0), SIM)
-        self.assertEqual([b["url"] for b in r["biens"]], ["ok", "cher", "sans-prix"])
+        self.assertEqual([b["url"] for b in r["biens"]],
+                          ["https://ex/ok", "https://ex/cher", "https://ex/sans-prix"])
         self.assertEqual((r["resume"]["financable"], r["resume"]["hors_budget"], r["resume"]["total"]),
                          (1, 1, 3))
         self.assertIsNotNone(r["resume"]["prix_max"])

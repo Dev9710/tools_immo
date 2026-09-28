@@ -2256,6 +2256,24 @@ def _nombre_saisi(valeur, defaut):
         return defaut
 
 
+def _montant_positif(valeur):
+    """Un montant négatif fausserait l'emprunt et la mensualité : ramené à 0."""
+    return max(0.0, _nombre_saisi(valeur, 0.0))
+
+
+def _entier_positif(valeur, defaut):
+    """Un effectif négatif n'a pas de sens : on revient à la valeur par défaut."""
+    v = _nombre_saisi(valeur, defaut)
+    return int(v) if v >= 0 else defaut
+
+
+def _duree_saisie(valeur, defaut):
+    """Une durée hors 5..30 ans fait planter (0) ou fausse (négatif) le calcul de
+    mensualité : on revient alors à la durée par défaut."""
+    v = _nombre_saisi(valeur, defaut)
+    return int(v) if 5 <= v <= 30 else defaut
+
+
 def _profil_par_defaut():
     return biens_gino.Profil(
         duree=20,
@@ -2292,15 +2310,15 @@ def biens_financables(request):
             d = _profil_par_defaut()
             p = request.POST
             request.session['profil_biens'] = {
-                'revenus': _nombre_saisi(p.get('revenus'), 0.0),
-                'charges': _nombre_saisi(p.get('charges'), 0.0),
-                'apport': _nombre_saisi(p.get('apport'), 0.0),
-                'duree': int(_nombre_saisi(p.get('duree'), d.duree)),
+                'revenus': _montant_positif(p.get('revenus')),
+                'charges': _montant_positif(p.get('charges')),
+                'apport': _montant_positif(p.get('apport')),
+                'duree': _duree_saisie(p.get('duree'), d.duree),
                 'taux_nominal': _nombre_saisi(p.get('taux_nominal'), d.taux_nominal),
                 'taux_assurance': _nombre_saisi(p.get('taux_assurance'), d.taux_assurance),
                 'primo': p.get('primo') == 'on',
-                'nb_adultes': int(_nombre_saisi(p.get('nb_adultes'), 2)),
-                'nb_enfants': int(_nombre_saisi(p.get('nb_enfants'), 0)),
+                'nb_adultes': _entier_positif(p.get('nb_adultes'), 2),
+                'nb_enfants': _entier_positif(p.get('nb_enfants'), 0),
             }
         return redirect(f"{reverse('biens_financables')}?ville={request.POST.get('ville', '')}")
 

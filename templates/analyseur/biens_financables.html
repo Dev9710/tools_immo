@@ -114,12 +114,12 @@
   <div class="table-responsive d-none d-md-block">
     <table class="table table-hover align-middle" id="table-biens">
       <thead class="table-light sticky-top"><tr>
-        <th data-tri="verdict" aria-sort="ascending" role="button">Verdict</th>
+        <th data-tri="verdict" aria-sort="ascending" role="button" tabindex="0">Verdict</th>
         <th>Bien</th>
-        <th class="text-end" data-tri="prix" role="button">Prix</th>
-        <th class="text-end" data-tri="mensualite" role="button">Mensualité</th>
-        <th class="text-end" data-tri="endettement" role="button">Endettement</th>
-        <th class="text-end" data-tri="ecart" role="button">Prix/m² vs ville</th>
+        <th class="text-end" data-tri="prix" role="button" tabindex="0">Prix</th>
+        <th class="text-end" data-tri="mensualite" role="button" tabindex="0">Mensualité</th>
+        <th class="text-end" data-tri="endettement" role="button" tabindex="0">Endettement</th>
+        <th class="text-end" data-tri="ecart" role="button" tabindex="0">Prix/m² vs ville</th>
         <th>DPE</th><th>Agences</th><th>Annonce</th>
       </tr></thead>
       <tbody>
@@ -181,14 +181,21 @@
   f.addEventListener('input', filtrer);
   document.getElementById('f-reset').addEventListener('click', () => setTimeout(filtrer));
   const corps = document.querySelector('#table-biens tbody');
+  function trier(th) {
+    const cle = th.dataset.tri === 'verdict' ? 'ordre' : th.dataset.tri;
+    const asc = th.getAttribute('aria-sort') !== 'ascending';
+    document.querySelectorAll('#table-biens th').forEach(h => h.removeAttribute('aria-sort'));
+    th.setAttribute('aria-sort', asc ? 'ascending' : 'descending');
+    [...corps.rows].sort((a, b) => (num(a, cle) - num(b, cle)) * (asc ? 1 : -1))
+      .forEach(r => corps.appendChild(r));
+  }
   document.querySelectorAll('#table-biens th[data-tri]').forEach(th => {
-    th.addEventListener('click', () => {
-      const cle = th.dataset.tri === 'verdict' ? 'ordre' : th.dataset.tri;
-      const asc = th.getAttribute('aria-sort') !== 'ascending';
-      document.querySelectorAll('#table-biens th').forEach(h => h.removeAttribute('aria-sort'));
-      th.setAttribute('aria-sort', asc ? 'ascending' : 'descending');
-      [...corps.rows].sort((a, b) => (num(a, cle) - num(b, cle)) * (asc ? 1 : -1))
-        .forEach(r => corps.appendChild(r));
+    th.addEventListener('click', () => trier(th));
+    th.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+        e.preventDefault();
+        trier(th);
+      }
     });
   });
 })();
