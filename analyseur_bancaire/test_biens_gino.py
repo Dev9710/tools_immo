@@ -21,6 +21,7 @@ class LectureNombresTests(SimpleTestCase):
     def test_formats_reels_de_gino(self):
         self.assertEqual(bg.nombre("254 000 €"), 254000.0)
         self.assertEqual(bg.nombre("254 000\xa0€"), 254000.0)
+        self.assertEqual(bg.nombre("254 000 €"), 254000.0)  # narrow no-break space U+202F
         self.assertEqual(bg.nombre("104,23 m²"), 104.23)
         self.assertEqual(bg.nombre("104.85 m²"), 104.85)
         self.assertEqual(bg.nombre("Entre 222 m² et 245 m²"), 222.0)
@@ -90,3 +91,25 @@ class ChargerVilleTests(SimpleTestCase):
         ville(self.tmp / "l-hay-les-roses", {"agences_immo.xlsx": "x"})   # pas de Gino
         self.assertEqual(bg.villes(self.tmp),
                          [{"slug": "champigny-sur-marne", "nom": "Champigny-sur-Marne"}])
+
+    def test_robustesse_type_non_string(self):
+        """Type non-string (ex: entier) ne doit pas planter ; le bien est ignoré."""
+        d = ville(self.tmp / "robustesse", {
+            "_gino_test.json": [
+                {"type": "Maison", "prix": "100 000", "url": "https://ex/valid"},
+                {"type": 123, "prix": "200 000", "url": "https://ex/invalid"},
+            ]
+        })
+        r = bg.charger_ville(d)
+        self.assertEqual(len(r["biens"]), 1)
+        self.assertEqual(r["biens"][0]["url"], "https://ex/valid")
+
+    def test_robustesse_stan_nom_non_string(self):
+        """Nom non-string dans _stan.json ne doit pas planter ; fallback au nom de fichier."""
+        d = ville(self.tmp / "robustesse-stan", {
+            "_gino_lesprix.json": [{"type": "Maison", "prix": "150 000", "url": "https://ex/1"}]
+        }, stan=[{"nom": 12345}])
+        r = bg.charger_ville(d)
+        self.assertEqual(len(r["biens"]), 1)
+        # Sans nom valide dans Stan, on doit utiliser le nom du fichier
+        self.assertEqual(r["biens"][0]["agence"], "Lesprix")

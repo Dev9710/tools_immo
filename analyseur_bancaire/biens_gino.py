@@ -25,7 +25,7 @@ def nombre(v):
         return None
     if isinstance(v, (int, float)):
         return float(v)
-    s = str(v).replace(" ", " ").replace("\xa0", " ")
+    s = str(v).replace(" ", " ").replace("\xa0", " ")
     s = re.sub(r"(?<=\d)[ .](?=\d{3}\b)", "", s)      # séparateurs de milliers
     m = re.search(r"\d+(?:[.,]\d+)?", s)
     return float(m.group().replace(",", ".")) if m else None
@@ -37,7 +37,7 @@ def entier(v):
 
 
 def _sans_accents(s):
-    s = unicodedata.normalize("NFKD", (s or "").lower())
+    s = unicodedata.normalize("NFKD", str(s if s is not None else "").lower())
     return "".join(c for c in s if not unicodedata.combining(c))
 
 
