@@ -233,7 +233,7 @@ def prix_max_financable(profil, sim):
     n = profil.duree * 12
     t = (profil.taux_nominal + profil.taux_assurance) / 100 / 12
     emprunt = mens_max * n if t == 0 else mens_max * (1 - (1 + t) ** -n) / t
-    taux_notaire = sim.calculer_frais_notaire(1.0, _cle_notaire(False, profil))
+    taux_notaire = sim.calculer_frais_notaire(1_000_000.0, _cle_notaire(False, profil)) / 1_000_000.0
     return round((emprunt + profil.apport) / (1 + taux_notaire), -2)
 
 

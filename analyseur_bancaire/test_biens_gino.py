@@ -222,6 +222,18 @@ class FinancementTests(SimpleTestCase):
         self.assertTrue(190000 < p < 196000, p)
         self.assertIsNone(bg.prix_max_financable(profil(revenus=0.0), SIM))
 
+    def test_prix_max_primo_vs_ancien(self):
+        """Primo has lower notary fees (7.5% vs 8%), so max price should be higher."""
+        p_primo = bg.prix_max_financable(profil(apport=20000.0, primo=True), SIM)
+        p_ancien = bg.prix_max_financable(profil(apport=20000.0, primo=False), SIM)
+        # Primo should allow higher price due to lower fees
+        self.assertGreater(p_primo, p_ancien,
+                          f"primo {p_primo} should be > ancien {p_ancien}")
+        # Verify primo rate is correctly applied (7.5% not 7%)
+        # Difference should be significant (more than rounding error)
+        self.assertGreater(p_primo - p_ancien, 500,
+                          f"difference {p_primo - p_ancien} should be > 500 to account for 7.5% vs 8%")
+
     def test_analyser_ville_trie_et_resume(self):
         d = ville(Path(tempfile.mkdtemp()) / "fresnes", {"_gino_a.json": [
             {"type": "Maison", "lieu": "Fresnes", "surface": "100 m²", "prix": "600 000 €", "url": "cher"},
