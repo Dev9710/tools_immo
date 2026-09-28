@@ -106,10 +106,17 @@
                             <div class="col-md-6 mb-3">
                                 <label class="form-label fw-bold">Type de bien</label>
                                 <select class="form-select form-select-lg" name="type_bien">
-                                    <option value="ancien" selected>Ancien (8% frais)</option>
+                                    <option value="ancien" selected>Ancien (8 % de frais, 7,5 % si primo-accédant)</option>
                                     <option value="neuf">Neuf (3% frais)</option>
                                 </select>
                             </div>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" name="primo_accedant" id="primo_accedant">
+                            <label class="form-check-label fw-bold" for="primo_accedant">
+                                Je suis primo-accédant
+                            </label>
+                            <div class="form-text">Premier achat de résidence principale : frais de notaire réduits (~7,5 % dans l'ancien).</div>
                         </div>
                         <div class="row">
                             <div class="col-md-6 mb-3">

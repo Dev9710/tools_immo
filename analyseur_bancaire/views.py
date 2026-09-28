@@ -10,13 +10,16 @@ import os
 import re
 import json
 
-# Configuration des taux de crédit immobilier (2025)
+# Taux nominaux hors assurance, profil « moyen » — septembre 2026.
+# Moyenne Meilleurtaux (01/09/2026 : 3,28 / 3,40 / 3,50 sur 15/20/25 ans) et Pretto
+# (20/09/2026, taux obtenus : 3,35 / 3,41 / 3,50). Écarts régionaux conservés
+# (IDF −0,08 ; Provence −0,03 ; Rhône-Alpes −0,06 par rapport au national).
 TAUX_ACTUELS = {
     'regions': {
-        'ile_de_france': {'7': 3.00, '10': 3.15, '15': 3.30, '20': 3.45, '25': 3.60},
-        'provence': {'7': 3.05, '10': 3.20, '15': 3.35, '20': 3.50, '25': 3.65},
-        'rhone_alpes': {'7': 3.02, '10': 3.17, '15': 3.32, '20': 3.47, '25': 3.62},
-        'autre': {'7': 3.08, '10': 3.23, '15': 3.38, '20': 3.53, '25': 3.68}
+        'ile_de_france': {'7': 3.17, '10': 3.22, '15': 3.24, '20': 3.33, '25': 3.42},
+        'provence': {'7': 3.22, '10': 3.27, '15': 3.29, '20': 3.38, '25': 3.47},
+        'rhone_alpes': {'7': 3.19, '10': 3.24, '15': 3.26, '20': 3.35, '25': 3.44},
+        'autre': {'7': 3.25, '10': 3.30, '15': 3.32, '20': 3.41, '25': 3.50}
     },
     'profils': {
         'excellent': -0.30,    # CDI, >10% apport, épargne
@@ -24,16 +27,21 @@ TAUX_ACTUELS = {
         'moyen': 0.00,         # CDD, apport minimal
         'risque': 0.25         # Profil difficile
     },
+    # Assurance emprunteur en délégation, non-fumeur (barèmes 2026).
     'assurance': {
-        'moins_30': 0.15,
-        '30_45': 0.25,
-        '45_plus': 0.45
+        'moins_30': 0.10,
+        '30_45': 0.20,
+        '45_plus': 0.40
     }
 }
 
+# Frais de notaire 2026. Toute l'Île-de-France a relevé les droits de mutation à
+# 5 % au 01/01/2026 (Val-de-Marne : 6,32 % de DMTO) → ~8 % dans l'ancien. Les
+# primo-accédants sont exonérés de la hausse → ~7,5 %.
 FRAIS_NOTAIRE = {
-    'ancien': 0.08,    # 8%
-    'neuf': 0.03       # 3%
+    'ancien': 0.08,
+    'ancien_primo': 0.075,
+    'neuf': 0.03
 }
 
 
@@ -1418,13 +1426,14 @@ def simulateur_pret(request):
                 # sinon les frais ne seraient réservés par rien.
                 apport = float(data.get('apport', 0))
                 type_bien = data.get('type_bien', 'ancien')
-                taux_notaire = FRAIS_NOTAIRE.get(
-                    type_bien, FRAIS_NOTAIRE['ancien'])
+                primo = data.get('primo_accedant') in ('on', 'true', '1', True)
+                cle_notaire = 'ancien_primo' if (primo and type_bien == 'ancien') else type_bien
+                taux_notaire = FRAIS_NOTAIRE.get(cle_notaire, FRAIS_NOTAIRE['ancien'])
 
                 budget_disponible = resultat['capacite_emprunt'] + apport
                 prix_max = budget_disponible / (1 + taux_notaire)
                 frais_notaire = simulateur.calculer_frais_notaire(
-                    prix_max, type_bien)
+                    prix_max, cle_notaire)
 
                 # Calcul reste à vivre avec alertes
                 reste_vivre_data = simulateur.calculer_reste_a_vivre(
@@ -1437,6 +1446,13 @@ def simulateur_pret(request):
                 request.session['mensualite_max'] = resultat['mensualite_max']
                 request.session['apport'] = apport
                 request.session['duree'] = duree
+                request.session['taux_nominal'] = resultat['taux_nominal']
+                request.session['taux_assurance'] = resultat['taux_assurance']
+                request.session['nb_adultes'] = nb_adultes
+                request.session['nb_enfants'] = nb_enfants
+                request.session['primo_accedant'] = primo
+                # Une nouvelle simulation fait foi sur la page « Biens finançables ».
+                request.session.pop('profil_biens', None)
 
                 resultat.update({
                     'prix_achat_max': round(prix_max, 2),
