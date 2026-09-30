@@ -582,6 +582,27 @@ class BanquePostaleParserSimple:
             seuil = self.SEUIL_PAR_DEFAUT
         return lines, seuil
 
+    _CIVILITE = re.compile(r'^(MR|MME|MLLE|M\.?|MONSIEUR|MADAME)\s+', re.IGNORECASE)
+
+    def extract_titulaires(self, lignes):
+        """Noms des titulaires lus dans l'en-tête (« MR DUPONT OU MME DUPONT MARTIN »).
+
+        La 1re ligne à civilité est celle du titulaire ; celle du conseiller vient
+        après. Sert à reconnaître les virements vers ses propres comptes sans
+        jamais écrire un nom dans le code.
+        """
+        for ligne in lignes[:60]:
+            ligne = ligne.strip()
+            if not self._CIVILITE.match(ligne):
+                continue
+            noms = []
+            for part in re.split(r'\s+(?:OU|ET)\s+', ligne.upper()):
+                for mot in self._CIVILITE.sub('', part).split():
+                    if len(mot) >= 4 and mot.isalpha() and mot not in noms:
+                        noms.append(mot)
+            return noms
+        return []
+
     def _clean_description(self, description):
         """Nettoie une description : retire les dates parasites, recolle les
         libellés agglutinés et normalise les espaces."""
@@ -648,6 +669,18 @@ class BanquePostaleParserSimple:
                 i += 1
                 continue
 
+            # Le bénéficiaire d'un virement est sur la ligne SUIVANTE (« DUPONT
+            # JEAN Livret A ») : sans elle, impossible de distinguer un
+            # virement vers son épargne d'une vraie dépense.
+            complement = []
+            if j == i:
+                for nxt in lines[i + 1:i + 3]:
+                    t = nxt['text'].strip()
+                    if not t or nxt['amounts'] or re.match(r'^\d{2}/\d{2}\s+', t):
+                        break
+                    if not t.upper().startswith('REFERENCE'):
+                        complement.append(t)
+
             # Une ligne d'opération porte un seul montant ; s'il y en a plusieurs
             # on prend le plus à droite (colonne des montants).
             value_str, x1 = max(amounts, key=lambda a: a[1])
@@ -665,6 +698,7 @@ class BanquePostaleParserSimple:
                     'sens': sens,
                     'type': self.categorize_operation(description),
                     'libelle': self.extract_libelle(description),
+                    'complement': re.sub(r'\d{6,}', '', ' '.join(complement)).strip(),
                 })
             i += 1
 
@@ -801,12 +835,15 @@ class BanquePostaleParserSimple:
                         'date': op['date'],
                         'libelle': op['libelle'],
                         'description': op['description'],
+                        'complement': op.get('complement', ''),
                         'montant': op['montant'],
                         'sens': op.get('sens'),
                     })
 
             return {
                 'success': True,
+                'titulaires': (self.extract_titulaires([l['text'] for l in lines])
+                               if lines is not None else []),
                 'operations_par_type': operations_par_type,
                 'periode': periode,
                 'totaux_releve': totaux,
@@ -1760,7 +1797,12 @@ def _ligne_operation(op):
         'montant': float(op['montant']),
         'montant_affiche': format_euros(op['montant']),
         'sens': op['sens'],
-        'poste': _cle_poste(op['libelle'] or op['description']),
+        'interne': bool(op.get('interne')),
+        'beneficiaire': (op.get('complement') or '')[:50],
+        # un virement se reconnaît à son bénéficiaire, pas à « VIREMENT POUR »
+        'poste': _cle_poste(op['complement'] if op.get('complement') and
+                            re.match(r'(?i)VIR', op['libelle'] or op['description'] or '')
+                            else op['libelle'] or op['description']),
     }
 
 
@@ -1775,6 +1817,8 @@ def _postes_recurrents(mois_complets, nb_mois):
     for m in mois_complets:
         vus_ce_mois = {}
         for op in m['operations']:
+            if op.get('interne'):
+                continue    # l'épargne n'est pas une charge fixe
             cle = (op['poste'], op['sens'])
             entree = vus_ce_mois.setdefault(cle, {'montant': 0.0, 'nb': 0})
             entree['montant'] += op['montant']
@@ -1832,6 +1876,34 @@ FREQUENCE_MINI_CHARGE = 50   # % des mois : en dessous, c'est ponctuel, pas une 
 
 def _sans_accents_maj(texte):
     return unicodedata.normalize('NFKD', texte or '').encode('ascii', 'ignore').decode().upper()
+
+
+_RE_EPARGNE = re.compile(r"\b(LIVRET|LDDS|LDD|LEP|PEL|CEL|EPARGNE|ECONOMIES?|ASSURANCE VIE|PERP)\b")
+
+
+def _proche(a, b):
+    """Même nom à une faute de frappe près (DUPONT / DUPPONT)."""
+    if abs(len(a) - len(b)) > 1:
+        return False
+    if len(a) == len(b):
+        return sum(x != y for x, y in zip(a, b)) <= 1
+    court, long_ = sorted((a, b), key=len)
+    return any(long_[:k] + long_[k + 1:] == court for k in range(len(long_)))
+
+
+def est_virement_interne(op, titulaires):
+    """Virement entre comptes du foyer : vers/depuis un titulaire, ou vers l'épargne.
+
+    Ce n'est ni une dépense ni un revenu (CC → PEL, LDDS, autre banque à soi) :
+    l'argent reste au foyer. Un remboursement de crédit n'est jamais interne.
+    """
+    texte = _sans_accents_maj(f"{op.get('description', '')} {op.get('complement', '')}")
+    if not re.search(r"\bVIR", texte) or _RE_CREDIT.search(texte):
+        return False
+    if _RE_EPARGNE.search(texte):
+        return True
+    mots = [m for m in re.findall(r"[A-Z]{5,}", texte)]
+    return any(_proche(m, t) for m in mots for t in titulaires if len(t) >= 5)
 
 
 def charges_bancaires(postes, nb_mois):
@@ -1925,6 +1997,13 @@ def analyser_flux_mensuels(releves):
     operations, doublons = _dedupliquer(operations, periodes)
     segments = _fusionner_periodes(periodes)
 
+    # Virements entre comptes du foyer : repérés APRÈS le contrôle des totaux
+    # (qui doit voir toutes les opérations du relevé), puis tenus à l'écart
+    # des dépenses et des revenus.
+    titulaires = sorted({t for r in releves for t in r.get('titulaires', [])})
+    for op in operations:
+        op['interne'] = est_virement_interne(op, titulaires)
+
     par_mois = {}
     for op in operations:
         par_mois.setdefault((op['date'].year, op['date'].month), []).append(op)
@@ -1937,10 +2016,14 @@ def analyser_flux_mensuels(releves):
             continue
 
         du_mois = par_mois[(annee, mois)]
-        debits = [op for op in du_mois if op['sens'] == 'debit']
-        credits = [op for op in du_mois if op['sens'] == 'credit']
+        debits = [op for op in du_mois if op['sens'] == 'debit' and not op.get('interne')]
+        credits = [op for op in du_mois if op['sens'] == 'credit' and not op.get('interne')]
         sorties = float(sum(op['montant'] for op in debits))
         entrees = float(sum(op['montant'] for op in credits))
+        internes_sortants = float(sum(op['montant'] for op in du_mois
+                                      if op['sens'] == 'debit' and op.get('interne')))
+        internes_entrants = float(sum(op['montant'] for op in du_mois
+                                      if op['sens'] == 'credit' and op.get('interne')))
 
         lignes = sorted((_ligne_operation(op) for op in du_mois),
                         key=lambda l: (-l['montant'],))
@@ -1956,6 +2039,8 @@ def analyser_flux_mensuels(releves):
             'solde_affiche': format_euros(abs(entrees - sorties)),
             'solde_positif': entrees >= sorties,
             'taux_effort': round(sorties / entrees * 100) if entrees else 0,
+            'internes_sortants': round(internes_sortants, 2),
+            'internes_entrants': round(internes_entrants, 2),
             'nb_sorties': len(debits),
             'nb_entrees': len(credits),
             'categories_sorties': _repartition(debits, CATEGORIES_SORTIES),
@@ -1977,6 +2062,8 @@ def analyser_flux_mensuels(releves):
     nb = len(mois_complets)
     sorties_moy = sum(m['sorties'] for m in mois_complets) / nb
     entrees_moy = sum(m['entrees'] for m in mois_complets) / nb
+    internes_s_moy = sum(m['internes_sortants'] for m in mois_complets) / nb
+    internes_e_moy = sum(m['internes_entrants'] for m in mois_complets) / nb
 
     # Échelle commune aux deux séries du graphique : sans elle, entrées et
     # sorties ne seraient pas comparables d'un coup d'œil.
@@ -2013,6 +2100,11 @@ def analyser_flux_mensuels(releves):
             'entrees_moyennes_affichees': format_euros(entrees_moy),
             'sorties_moyennes': round(sorties_moy, 2),
             'sorties_moyennes_affichees': format_euros(sorties_moy),
+            'internes_sortants_moyens': round(internes_s_moy, 2),
+            'internes_sortants_affiches': format_euros(internes_s_moy),
+            'internes_entrants_moyens': round(internes_e_moy, 2),
+            'internes_entrants_affiches': format_euros(internes_e_moy),
+            'titulaires': titulaires,
             'reste': round(entrees_moy - sorties_moy, 2),
             'reste_affiche': format_euros(abs(entrees_moy - sorties_moy)),
             'reste_positif': entrees_moy >= sorties_moy,
@@ -2068,6 +2160,7 @@ def _lire_releves(fichiers):
             'nom': fichier.name,
             'periode': resultats.get('periode'),
             'totaux_releve': resultats.get('totaux_releve'),
+            'titulaires': resultats.get('titulaires', []),
             'operations': operations,
         })
     return releves

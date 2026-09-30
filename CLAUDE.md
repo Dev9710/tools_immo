@@ -189,6 +189,17 @@ revenus du simulateur, avec la mention de leur provenance. C'est le seul état p
 de humanize produit une virgule anglo-saxonne, et l'app n'installe pas humanize) : comme tout le
 formatage, il vit dans la vue.
 
+**Virements internes (30/09).** Un virement vers/depuis un titulaire du compte (noms lus dans
+l'en-tête du relevé par `extract_titulaires`, jamais écrits dans le code ; tolérance d'une faute :
+DUPONT/DUPPONT) ou vers l'épargne (Livret, LDDS, PEL…) est marqué `interne` par
+`est_virement_interne` : exclu des entrées, des sorties et des postes récurrents, affiché à part
+(« Épargne et virements entre tes comptes »). Le bénéficiaire vient de la ligne SOUS l'opération
+(`complement` dans le parser). Le contrôle des totaux du relevé, lui, voit toutes les opérations.
+
+**Charges du simulateur (30/09).** `charges_bancaires` ne retient que les crédits récurrents
+(prêteurs/échéances) → session `charges_credits` ; le loyer (`loyer_actuel`) est à part pour le
+« saut de charge ». Avant, TOUTES les sorties allaient dans les charges : endettement faux.
+
 ### Parcours « charges fixes » en deux POST
 
 `charges_fixes` est une machine à états dans une seule vue :

@@ -265,6 +265,18 @@
         </div>
       </div>
 
+      {% if analyse.resume.internes_sortants_moyens or analyse.resume.internes_entrants_moyens %}
+      <div class="alert alert-light border mt-3 mb-0 small">
+        <i class="bi bi-piggy-bank me-1"></i><strong>Épargne et virements entre tes comptes : {{ analyse.resume.internes_sortants_affiches }} €/mois</strong>
+        <ul class="mb-0 mt-1">
+          <li>Virements vers tes comptes, ceux du foyer ou ton épargne (Livret A, LDDS, PEL…).</li>
+          <li>Ce ne sont ni des dépenses ni des revenus : ils ne sont pas comptés dans les entrées et sorties ci-dessus.</li>
+          {% if analyse.resume.internes_entrants_moyens %}<li>Dans l'autre sens, {{ analyse.resume.internes_entrants_affiches }} €/mois reviennent de tes autres comptes.</li>{% endif %}
+          <li>Bon point pour ta banque : c'est la preuve que tu épargnes chaque mois.</li>
+        </ul>
+      </div>
+      {% endif %}
+
       <div id="blocCorrige" class="dm-corrige mt-3" hidden>
         <i class="bi bi-pencil-fill me-1"></i>
         <strong>Avec vos lignes ajoutées :</strong>
@@ -609,9 +621,9 @@
                     </thead>
                     <tbody>
                       {% for op in m.operations %}
-                        <tr class="dm-op" data-sens="{{ op.sens }}">
+                        <tr class="dm-op{% if op.interne %} text-muted{% endif %}" data-sens="{{ op.sens }}">
                           <td class="dm-num text-muted small">{{ op.jour }}</td>
-                          <td class="text-truncate" style="max-width: 300px;" title="{{ op.libelle }}">{{ op.libelle }}</td>
+                          <td class="text-truncate" style="max-width: 300px;" title="{{ op.libelle }} {{ op.beneficiaire }}">{{ op.libelle }}{% if op.beneficiaire %} <span class="small text-muted">· {{ op.beneficiaire }}</span>{% endif %}{% if op.interne %} <span class="badge bg-light text-secondary border">interne</span>{% endif %}</td>
                           <td class="small text-muted text-truncate" style="max-width: 220px;">{{ op.categorie }}</td>
                           <td class="text-end dm-num fw-semibold {% if op.sens == 'credit' %}text-success{% endif %}">
                             {% if op.sens == 'credit' %}+{% else %}−{% endif %}{{ op.montant_affiche }} €

@@ -100,3 +100,48 @@ class SimulateurPreremplissageTests(SimpleTestCase):
         r = self.client.get(reverse('simulateur_pret'))
         self.assertContains(r, 'name="charges_mensuelles" min="0" step="50" value="370"')
         self.assertContains(r, 'loyer')
+
+
+class VirementsInternesTests(SimpleTestCase):
+    """Un virement entre ses propres comptes (ou vers l'épargne du foyer) n'est ni une dépense ni un revenu."""
+
+    def test_titulaires_lus_dans_l_entete(self):
+        from .views import BanquePostaleParserSimple
+        p = BanquePostaleParserSimple()
+        lignes = ["Clients 45900 LA SOURCE CEDEX", "MR DUPONT OU MME DUPONT MARTIN",
+                  "Mme PRIEUR FLORENCE APPARTEMENT 55"]
+        self.assertEqual(p.extract_titulaires(lignes), ['DUPONT', 'MARTIN'])
+
+    def test_reconnaissance(self):
+        from .views import est_virement_interne as interne
+        t = ['DUPONT', 'MARTIN']
+        op = lambda d, c='': {'description': d, 'complement': c}
+        self.assertTrue(interne(op('VIREMENT INSTANTANE A', 'DUPONT JEAN Economie'), t))
+        self.assertTrue(interne(op('VIREMENT PERMANENT POUR', 'M DUPPONT JEAN COMPTE FR76'), t))  # 1 faute de frappe
+        self.assertTrue(interne(op('VIREMENT INSTANTANE A', 'MME DUPONT MARTIN ALICE Livret A'), t))
+        self.assertTrue(interne(op('VIREMENT DE MR JEAN DUPONT'), t))                   # entrée interne
+        self.assertTrue(interne(op('VIREMENT POUR', 'X COMPTE LDDS'), []))                # mot d'épargne
+        self.assertFalse(interne(op('VIREMENT PERMANENT POUR', 'BOX COMPTE FR76 BOX NUMERO 1'), t))
+        self.assertFalse(interne(op('VIREMENT DE HIGHTEKERS', 'PAIE AVRIL'), t))           # salaire
+        self.assertFalse(interne(op('PRELEVEMENT DE DUPONT ASSURANCES'), t))              # pas un virement
+        self.assertFalse(interne(op('VIREMENT POUR', 'ECHEANCE PRET CAISSE D EPARGNE'), t))  # un crédit
+
+    def test_exclus_des_depenses_et_revenus(self):
+        from decimal import Decimal
+        from datetime import date
+        from .views import analyser_flux_mensuels
+        def o(j, desc, m, sens, comp=''):
+            return {'date': date(2026, 4, j), 'description': desc, 'libelle': desc, 'complement': comp,
+                    'montant': Decimal(m), 'sens': sens, 'type': 'autre'}
+        releve = {'nom': 'a.pdf', 'periode': (date(2026, 3, 30), date(2026, 5, 2)), 'totaux_releve': None,
+                  'titulaires': ['DUPONT'],
+                  'operations': [o(2, 'VIREMENT DE ACME', '3000', 'credit', 'PAIE'),
+                                 o(3, 'ACHAT CB LECLERC', '400', 'debit'),
+                                 o(4, 'VIREMENT INSTANTANE A', '1000', 'debit', 'DUPONT JEAN Livret A'),
+                                 o(5, 'VIREMENT DE MR JEAN DUPONT', '200', 'credit')]}
+        a = analyser_flux_mensuels([releve])
+        self.assertEqual(a['resume']['sorties_moyennes'], 400.0)
+        self.assertEqual(a['resume']['entrees_moyennes'], 3000.0)
+        self.assertEqual(a['resume']['internes_sortants_moyens'], 1000.0)
+        self.assertEqual(a['resume']['internes_entrants_moyens'], 200.0)
+        self.assertNotIn('LIVRET', ' '.join(p['exemple'].upper() for p in a['postes_recurrents']))
