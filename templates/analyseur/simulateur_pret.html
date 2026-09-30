@@ -58,8 +58,10 @@
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label fw-bold">Charges mensuelles (€)</label>
-                                <input type="number" class="form-control form-control-lg" name="charges_mensuelles" min="0" step="50" value="{{ depenses_mensuelles|default:0|floatformat:0 }}">
-                                {% if depenses_mensuelles %}<div class="form-text"><i class="bi bi-check-circle-fill text-success me-1"></i>Repris de votre analyse de dépenses mensuelles.</div>{% endif %}
+                                <input type="number" class="form-control form-control-lg" name="charges_mensuelles" min="0" step="50" value="{{ charges_credits|default:0|floatformat:0 }}">
+                                <div class="form-text">Seulement tes crédits en cours et pensions versées (voir l'aide-mémoire).</div>
+                                {% if charges_credits is not None %}<div class="form-text"><i class="bi bi-check-circle-fill text-success me-1"></i>{% if charges_credits %}Mensualités de crédit trouvées dans tes relevés (moyenne).{% else %}Aucun crédit trouvé dans tes relevés : ajoute-le s'il y en a un.{% endif %}</div>{% endif %}
+                                {% if loyer_actuel %}<div class="form-text"><i class="bi bi-house me-1"></i>Ton loyer actuel (≈ {{ loyer_actuel|floatformat:0 }} €/mois) n'est pas compté : il disparaît avec l'achat.</div>{% endif %}
                             </div>
                         </div>
                         <div class="row">
@@ -111,7 +113,8 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="form-check mb-3">
+                        {% include "analyseur/_aide_memoire.html" %}
+                        <div class="form-check mb-3 mt-3">
                             <input class="form-check-input" type="checkbox" name="primo_accedant" id="primo_accedant">
                             <label class="form-check-label fw-bold" for="primo_accedant">
                                 Je suis primo-accédant
@@ -335,6 +338,25 @@ function exporterDossier() {
     window.open('{% url "export_dossier_pdf" %}', '_blank');
 }
 
+// Loyer actuel repéré dans les relevés : comparé à la future mensualité, c'est
+// le « saut de charge » que la banque regarde (proche de 0 = tu sais déjà payer).
+const LOYER_ACTUEL = {{ loyer_actuel|default:0|floatformat:"0u" }};
+
+function sautDeCharge(mensualite) {
+    if (!LOYER_ACTUEL || !mensualite) return '';
+    const fmt = v => new Intl.NumberFormat('fr-FR').format(Math.round(v));
+    const ecart = mensualite - LOYER_ACTUEL;
+    const texte = ecart > 0 ? `soit <strong>+${fmt(ecart)} €/mois</strong> par rapport à aujourd'hui`
+                            : `soit <strong>${fmt(-ecart)} €/mois de moins</strong> qu'aujourd'hui`;
+    return `<div class="alert alert-light border mt-3 mb-0">
+        <i class="bi bi-arrow-left-right me-1"></i><strong>Saut de charge</strong>
+        <ul class="mb-0 mt-1">
+            <li>Ton loyer actuel : ${fmt(LOYER_ACTUEL)} €/mois.</li>
+            <li>Mensualité estimée : ${fmt(mensualite)} €/mois, ${texte}.</li>
+            <li>Plus l'écart est faible, plus ton dossier rassure la banque.</li>
+        </ul></div>`;
+}
+
 function afficherResultats(data, mode) {
     const container = document.getElementById('resultats-content');
     
@@ -387,6 +409,7 @@ function afficherResultats(data, mode) {
                     <p><strong>Coût des intérêts:</strong> ${new Intl.NumberFormat('fr-FR').format(data.cout_interets)} €</p>
                 </div>
             </div>
+            ${sautDeCharge(data.mensualite_max)}
             <p class="mt-3 mb-0">
                 <i class="bi bi-arrow-right-circle"></i>
                 <a href="{% url 'biens_financables' %}">Voir les biens à ta portée</a>

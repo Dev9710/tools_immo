@@ -14,6 +14,7 @@ import math
 import tempfile
 import os
 import re
+import unicodedata
 import json
 
 from . import biens_gino
@@ -1500,7 +1501,8 @@ def simulateur_pret(request):
     # mensuelles ont deja ete analysees, on prerempli le champ « charges » :
     # l'utilisateur n'a pas a recopier un chiffre que l'outil connait deja.
     return render(request, 'analyseur/simulateur_pret.html', {
-        'depenses_mensuelles': request.session.get('depenses_mensuelles'),
+        'charges_credits': request.session.get('charges_credits'),
+        'loyer_actuel': request.session.get('loyer_actuel'),
         'revenus_mensuels': request.session.get('revenus_mensuels'),
     })
 
@@ -1814,6 +1816,48 @@ def _postes_recurrents(mois_complets, nb_mois):
     return resultat
 
 
+# Ce que la banque compte dans les 35 % d'endettement : les crédits en cours
+# (et pensions versées), PAS les dépenses courantes. Le loyer actuel disparaît
+# avec l'achat de la résidence principale : il est rendu à part, pour le
+# « saut de charge », jamais ajouté aux charges.
+_RE_CREDIT = re.compile(
+    r"\b(PRET|ECHEANCE|ECH PRET|CREDIT IMMO|CREDIT CONSO|COFIDIS|CETELEM|SOFINCO|"
+    r"FRANFINANCE|ONEY|FLOA|YOUNITED|COFINOGA|FINANCO|DIAC|RCI BANQUE|PSA BANQUE|"
+    r"CA CONSUMER|BNP PERSONAL|LOA|LLD|PENSION ALIMENTAIRE)\b")
+_RE_LOYER = re.compile(
+    r"\b(LOYER|LOYERS|BAILLEUR|FONCIA|NEXITY|CITYA|ORALIA|PARIS HABITAT|OPH|HLM|"
+    r"VALOPHIS|SEQENS|ICF HABITAT|CDC HABITAT|IN LI|IMMOBILIERE 3F)\b")
+FREQUENCE_MINI_CHARGE = 50   # % des mois : en dessous, c'est ponctuel, pas une mensualité
+
+
+def _sans_accents_maj(texte):
+    return unicodedata.normalize('NFKD', texte or '').encode('ascii', 'ignore').decode().upper()
+
+
+def charges_bancaires(postes, nb_mois):
+    """Mensualités de crédit et loyer repérés dans les postes récurrents sortants.
+
+    Moyenne sur TOUS les mois complets (montant total ÷ nb de mois) : un
+    prélèvement vu 2 mois sur 3 pèse pour ce qu'il coûte réellement par mois.
+    """
+    def montant(p):
+        return round(p['montant_total'] / nb_mois, 2) if nb_mois else 0.0
+
+    credits, loyers = [], []
+    for p in postes:
+        if p['sens'] != 'debit' or p['frequence'] < FREQUENCE_MINI_CHARGE:
+            continue
+        texte = _sans_accents_maj(f"{p['exemple']} {p['poste']}")
+        cible = credits if _RE_CREDIT.search(texte) else loyers if _RE_LOYER.search(texte) else None
+        if cible is not None:
+            cible.append({'exemple': p['exemple'], 'mensuel': montant(p),
+                          'mensuel_affiche': format_euros(montant(p))})
+    credits.sort(key=lambda c: -c['mensuel'])
+    loyers.sort(key=lambda c: -c['mensuel'])
+    return {'credits': credits, 'credits_mensuels': round(sum(c['mensuel'] for c in credits), 2),
+            'loyers': loyers, 'loyer_mensuel': round(sum(c['mensuel'] for c in loyers), 2)}
+
+
 def analyser_flux_mensuels(releves):
     """Analyse complète des flux du compte, par mois civil entièrement couvert.
 
@@ -1941,6 +1985,7 @@ def analyser_flux_mensuels(releves):
         m['hauteur_sorties'] = round(m['sorties'] / maximum * 100)
         m['hauteur_entrees'] = round(m['entrees'] / maximum * 100)
 
+    postes = _postes_recurrents(mois_complets, nb)
     tendance = None
     if nb >= 2:
         dernier = mois_complets[-1]
@@ -1960,7 +2005,8 @@ def analyser_flux_mensuels(releves):
         'nb_mois': nb,
         'premier_mois': mois_complets[0]['libelle'],
         'dernier_mois': mois_complets[-1]['libelle'],
-        'postes_recurrents': _postes_recurrents(mois_complets, nb),
+        'postes_recurrents': postes,
+        'charges_bancaires': charges_bancaires(postes, nb),
         'seuil_recurrence': SEUIL_RECURRENCE_PAR_DEFAUT,
         'resume': {
             'entrees_moyennes': round(entrees_moy, 2),
@@ -2076,9 +2122,13 @@ def depenses_mensuelles(request):
                      "complet, et N+1 pour analyser N mois."
         })
 
-    # Report vers le simulateur : les deux chiffres que la banque regarde.
+    # Report vers le simulateur. Les « charges » de l'endettement ne sont que
+    # les crédits en cours : toutes les sorties y faisaient passer n'importe
+    # quel bien « hors budget ». Les dépenses totales restent pour l'accueil.
     request.session['depenses_mensuelles'] = analyse['resume']['sorties_moyennes']
     request.session['revenus_mensuels'] = analyse['resume']['entrees_moyennes']
+    request.session['charges_credits'] = analyse['charges_bancaires']['credits_mensuels']
+    request.session['loyer_actuel'] = analyse['charges_bancaires']['loyer_mensuel']
 
     return render(request, 'analyseur/depenses_mensuelles.html', {
         'analyse': analyse,
