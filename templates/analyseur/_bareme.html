@@ -1,0 +1,7 @@
+{% if bareme %}
+<div class="small {% if bareme.perime %}alert alert-warning py-2 mb-2{% else %}text-muted mb-2{% endif %}">
+  <i class="bi bi-calendar-check"></i>
+  Taux du barème {{ bareme.source }} du {{ bareme.date }}.
+  {% if bareme.perime %}<strong>Il a plus d'un mois : les taux du jour peuvent être différents, fais-le mettre à jour.</strong>{% endif %}
+</div>
+{% endif %}

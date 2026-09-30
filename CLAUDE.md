@@ -200,6 +200,12 @@ DUPONT/DUPPONT) ou vers l'épargne (Livret, LDDS, PEL…) est marqué `interne` 
 (prêteurs/échéances) → session `charges_credits` ; le loyer (`loyer_actuel`) est à part pour le
 « saut de charge ». Avant, TOUTES les sorties allaient dans les charges : endettement faux.
 
+**Taux (30/09).** RÈGLE utilisateur : toujours les taux les plus récents. `TAUX_ACTUELS` porte sa
+date (`TAUX_DATE`, `TAUX_SOURCE`) ; `bareme_info()` l'affiche sur toutes les pages (context
+processor) et alerte au-delà de 30 jours. Le taux dépend de la durée : `taux_pour_duree()`
+interpole entre les paliers ; sur « Biens finançables », changer la durée ajuste le taux en
+gardant l'écart au barème (profil, négociation). Les tests lisent la table, jamais un taux en dur.
+
 ### Parcours « charges fixes » en deux POST
 
 `charges_fixes` est une machine à états dans une seule vue :

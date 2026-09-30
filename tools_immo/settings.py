@@ -54,6 +54,7 @@ TEMPLATES = [
             'context_processors': [
                 'django.template.context_processors.debug',
                 'django.template.context_processors.request',
+                'analyseur_bancaire.context_processors.bareme',
             ],
         },
     },

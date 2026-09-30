@@ -6,6 +6,8 @@ from django.conf import settings
 from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
 
+from .views import TAUX_ACTUELS
+
 TMP = Path(tempfile.mkdtemp())
 FRESNES = TMP / "fresnes"
 FRESNES.mkdir()
@@ -79,7 +81,7 @@ class PageBiensTests(SimpleTestCase):
         self.assertNotContains(r, 'value="inf"')
         p = self.client.session["profil_biens"]
         self.assertEqual(p["nb_adultes"], 2)
-        self.assertEqual(p["taux_nominal"], 3.33)
+        self.assertEqual(p["taux_nominal"], TAUX_ACTUELS['regions']['ile_de_france']['20'])  # défaut = barème du jour
 
     def test_taux_negatif_repli_sur_defaut(self):
         r = self.client.post(reverse("biens_financables"),
@@ -87,7 +89,7 @@ class PageBiensTests(SimpleTestCase):
                               follow=True)
         self.assertEqual(r.status_code, 200)
         p = self.client.session["profil_biens"]
-        self.assertEqual(p["taux_nominal"], 3.33)
+        self.assertEqual(p["taux_nominal"], TAUX_ACTUELS['regions']['ile_de_france']['20'])  # défaut = barème du jour
         self.assertEqual(p["taux_assurance"], 0.2)
 
     def test_donnees_numeriques_non_localisees_dans_les_data_attributes(self):

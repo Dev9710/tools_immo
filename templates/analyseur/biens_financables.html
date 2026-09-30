@@ -50,6 +50,7 @@
       <p class="mb-3"><i class="bi bi-arrow-right-circle"></i> Complète ton profil pour voir ce que tu peux financer.
         Tu peux aussi <a href="{% url 'simulateur_pret' %}">faire ta simulation</a> : ses chiffres seront repris ici.</p>
       {% endif %}
+      {% include "analyseur/_bareme.html" %}
       <form method="post" class="row g-2 align-items-end">
         {% csrf_token %}
         <input type="hidden" name="ville" value="{{ ville.slug }}">
@@ -75,6 +76,7 @@
           {% if source_profil == 'saisie' %}<button class="btn btn-link" name="action" value="reprendre">Reprendre ma simulation</button>{% endif %}
         </div>
       </form>
+      <p id="note-taux-duree" class="small text-primary mt-2 mb-0" hidden><i class="bi bi-info-circle"></i> Taux ajusté à la nouvelle durée : plus un prêt est long, plus son taux est élevé. Clique sur « Recalculer ».</p>
       {% include "analyseur/_aide_memoire.html" %}
     </div>
   </div>
@@ -165,6 +167,28 @@
   {% endif %}
 </div>
 
+{{ bareme_durees|json_script:"bareme-durees" }}
+<script>
+// Le taux dépend de la durée : quand la durée change, le taux suit le barème en
+// gardant ton écart (profil, négociation). Tu peux toujours saisir un autre taux.
+(function () {
+  const duree = document.getElementById('duree');
+  const taux = document.getElementById('taux_nominal');
+  const bareme = JSON.parse(document.getElementById('bareme-durees').textContent);
+  if (!duree || !taux) return;
+  const tauxDe = d => bareme[Math.min(30, Math.max(5, parseInt(d, 10) || 20))];
+  let avant = duree.value;
+  duree.addEventListener('change', () => {
+    const actuel = parseFloat(String(taux.value).replace(',', '.'));
+    if (!isNaN(actuel) && tauxDe(avant) !== undefined && tauxDe(duree.value) !== undefined) {
+      taux.value = (actuel + tauxDe(duree.value) - tauxDe(avant)).toFixed(2);
+      const note = document.getElementById('note-taux-duree');
+      if (note) note.hidden = false;
+    }
+    avant = duree.value;
+  });
+})();
+</script>
 <script>
 (function () {
   const f = document.getElementById('filtres');

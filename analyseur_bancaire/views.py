@@ -19,16 +19,25 @@ import json
 
 from . import biens_gino
 
-# Taux nominaux hors assurance, profil « moyen » — septembre 2026.
-# Moyenne Meilleurtaux (01/09/2026 : 3,28 / 3,40 / 3,50 sur 15/20/25 ans) et Pretto
-# (20/09/2026, taux obtenus : 3,35 / 3,41 / 3,50). Écarts régionaux conservés
-# (IDF −0,08 ; Provence −0,03 ; Rhône-Alpes −0,06 par rapport au national).
+# RÈGLE : toujours les taux les plus récents possible (consigne utilisateur du
+# 30/09/2026). Mettre à jour TAUX_DATE avec la table ; l'app affiche la date et
+# alerte au-delà de BAREME_VALIDITE_JOURS.
+#
+# Taux nominaux hors assurance, profil « moyen » = profil « bon » de Meilleurtaux,
+# baromètre du 29/09/2026 : 3,58 / 3,64 / 3,73 % sur 15 / 20 / 25 ans (excellent
+# 3,11 / 3,21 / 3,31 ; très bon 3,45 / 3,60 / 3,68). Hausse depuis la mi-septembre
+# (OAT 10 ans > 4 %) : Pretto 20/09 = 3,43 / 3,54 / 3,61. 7 et 10 ans : même écart
+# au 15 ans qu'auparavant (−0,07 ; −0,02). Écarts régionaux conservés (IDF −0,08 ;
+# Provence −0,03 ; Rhône-Alpes −0,06 par rapport au national).
+TAUX_DATE = date(2026, 9, 29)
+TAUX_SOURCE = "Meilleurtaux"
+BAREME_VALIDITE_JOURS = 30
 TAUX_ACTUELS = {
     'regions': {
-        'ile_de_france': {'7': 3.17, '10': 3.22, '15': 3.24, '20': 3.33, '25': 3.42},
-        'provence': {'7': 3.22, '10': 3.27, '15': 3.29, '20': 3.38, '25': 3.47},
-        'rhone_alpes': {'7': 3.19, '10': 3.24, '15': 3.26, '20': 3.35, '25': 3.44},
-        'autre': {'7': 3.25, '10': 3.30, '15': 3.32, '20': 3.41, '25': 3.50}
+        'ile_de_france': {'7': 3.43, '10': 3.48, '15': 3.50, '20': 3.56, '25': 3.65},
+        'provence': {'7': 3.48, '10': 3.53, '15': 3.55, '20': 3.61, '25': 3.70},
+        'rhone_alpes': {'7': 3.45, '10': 3.50, '15': 3.52, '20': 3.58, '25': 3.67},
+        'autre': {'7': 3.51, '10': 3.56, '15': 3.58, '20': 3.64, '25': 3.73}
     },
     'profils': {
         'excellent': -0.30,    # CDI, >10% apport, épargne
@@ -47,6 +56,34 @@ TAUX_ACTUELS = {
 # Frais de notaire 2026. Toute l'Île-de-France a relevé les droits de mutation à
 # 5 % au 01/01/2026 (Val-de-Marne : 6,32 % de DMTO) → ~8 % dans l'ancien. Les
 # primo-accédants sont exonérés de la hausse → ~7,5 %.
+def taux_pour_duree(duree, region='ile_de_france'):
+    """Taux nominal « moyen » du barème pour une durée quelconque.
+
+    Le barème ne donne que 7/10/15/20/25 ans : entre deux paliers on interpole,
+    au-delà on garde le palier extrême. Plus c'est long, plus c'est cher.
+    """
+    table = sorted((int(k), v) for k, v in TAUX_ACTUELS['regions'][region].items())
+    if duree <= table[0][0]:
+        return table[0][1]
+    for (d1, t1), (d2, t2) in zip(table, table[1:]):
+        if duree <= d2:
+            return round(t1 + (t2 - t1) * (duree - d1) / (d2 - d1), 2)
+    return table[-1][1]
+
+
+def bareme_durees(region='ile_de_france'):
+    """{durée: taux} de 5 à 30 ans, pour ajuster le taux dès qu'on change la durée."""
+    return {d: taux_pour_duree(d, region) for d in range(5, 31)}
+
+
+def bareme_info(aujourd_hui=None):
+    """Date et source du barème, et s'il est périmé (affichés sur les pages)."""
+    age = ((aujourd_hui or date.today()) - TAUX_DATE).days
+    return {'date': TAUX_DATE.strftime('%d/%m/%Y'), 'source': TAUX_SOURCE,
+            'perime': age > BAREME_VALIDITE_JOURS, 'age_jours': age,
+            'taux_20': f"{TAUX_ACTUELS['regions']['autre']['20']:.2f}".replace('.', ',')}
+
+
 FRAIS_NOTAIRE = {
     'ancien': 0.08,
     'ancien_primo': 0.075,
@@ -2479,7 +2516,8 @@ def biens_financables(request):
 
     profil, source = _profil_biens(request.session)
     contexte = {'racine': racine, 'villes': liste or [], 'dossier_introuvable': liste is None,
-                'profil': profil, 'source_profil': source}
+                'profil': profil, 'source_profil': source,
+                'bareme_durees': bareme_durees()}
     slugs = {v['slug'] for v in liste or []}
     slug = request.GET.get('ville')
     if slug not in slugs:   # ville absente (faute de frappe ou tentative de path traversal) :

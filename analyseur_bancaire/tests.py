@@ -7,11 +7,24 @@ from .views import FRAIS_NOTAIRE, TAUX_ACTUELS, SimulateurPretImmobilier
 
 
 class BaremesTests(SimpleTestCase):
-    def test_taux_septembre_2026(self):
-        self.assertEqual(TAUX_ACTUELS['regions']['autre']['20'], 3.41)
-        self.assertEqual(TAUX_ACTUELS['regions']['ile_de_france']['20'], 3.33)
-        self.assertEqual(TAUX_ACTUELS['regions']['ile_de_france']['25'], 3.42)
+    def test_taux_fin_septembre_2026(self):
+        # Meilleurtaux 29/09/2026, profil « bon » = notre « moyen » national
+        self.assertEqual(TAUX_ACTUELS['regions']['autre']['20'], 3.64)
+        self.assertEqual(TAUX_ACTUELS['regions']['autre']['25'], 3.73)
+        self.assertEqual(TAUX_ACTUELS['regions']['ile_de_france']['20'], 3.56)
         self.assertEqual(TAUX_ACTUELS['assurance']['30_45'], 0.20)
+
+    def test_date_du_bareme_et_alerte(self):
+        from datetime import date
+        from .views import TAUX_DATE, bareme_info
+        self.assertEqual(TAUX_DATE, date(2026, 9, 29))
+        frais = bareme_info(date(2026, 10, 5))
+        self.assertEqual((frais['date'], frais['perime']), ('29/09/2026', False))
+        self.assertTrue(bareme_info(date(2026, 11, 5))['perime'])   # plus de 30 jours
+
+    def test_date_affichee_sur_les_pages(self):
+        for nom in ('simulateur_pret', 'biens_financables'):
+            self.assertContains(self.client.get(reverse(nom)), '29/09/2026')
 
     def test_frais_de_notaire(self):
         s = SimulateurPretImmobilier()
@@ -38,7 +51,7 @@ class SimulateurSessionTests(SimpleTestCase):
     def test_memorise_taux_foyer_et_primo(self):
         self.assertTrue(self._simuler(primo_accedant='on').json()['success'])
         s = self.client.session
-        self.assertEqual(s['taux_nominal'], 3.33)
+        self.assertEqual(s['taux_nominal'], TAUX_ACTUELS['regions']['ile_de_france']['20'])
         self.assertEqual(s['taux_assurance'], 0.20)
         self.assertEqual(s['nb_enfants'], 1)
         self.assertIs(s['primo_accedant'], True)
@@ -145,3 +158,21 @@ class VirementsInternesTests(SimpleTestCase):
         self.assertEqual(a['resume']['internes_sortants_moyens'], 1000.0)
         self.assertEqual(a['resume']['internes_entrants_moyens'], 200.0)
         self.assertNotIn('LIVRET', ' '.join(p['exemple'].upper() for p in a['postes_recurrents']))
+
+
+class TauxSelonDureeTests(SimpleTestCase):
+    """Le taux dépend de la durée : 25 ans coûte plus cher que 20 ans."""
+
+    def test_durees_du_bareme_et_interpolation(self):
+        from .views import taux_pour_duree
+        idf = TAUX_ACTUELS['regions']['ile_de_france']
+        self.assertEqual(taux_pour_duree(20), idf['20'])
+        self.assertEqual(taux_pour_duree(25), idf['25'])
+        self.assertAlmostEqual(taux_pour_duree(22), idf['20'] + (idf['25'] - idf['20']) * 2 / 5, places=2)
+        self.assertEqual(taux_pour_duree(30), idf['25'])      # au-delà du barème : dernier palier
+        self.assertEqual(taux_pour_duree(5), idf['7'])
+        self.assertGreater(taux_pour_duree(25), taux_pour_duree(20))
+
+    def test_page_biens_embarque_le_bareme_par_duree(self):
+        r = self.client.get(reverse('biens_financables'))
+        self.assertContains(r, 'id="bareme-durees"')
