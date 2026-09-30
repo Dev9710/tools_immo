@@ -144,3 +144,42 @@ class VraiesDonneesTests(SimpleTestCase):
         r = self.client.get(reverse("biens_financables"), {"ville": "fresnes"})
         self.assertEqual(r.status_code, 200)
         self.assertGreater(r.context["analyse"]["resume"]["total"], 50)
+
+
+class TauxPerimeEnSessionTests(SimpleTestCase):
+    """Un taux gardé en session depuis un ancien barème est remis au barème du jour."""
+
+    def _session(self, **valeurs):
+        s = self.client.session
+        s.update(valeurs)
+        s.save()
+        self.client.cookies[settings.SESSION_COOKIE_NAME] = s.session_key
+
+    def test_simulation_d_un_ancien_bareme_actualisee(self):
+        self._session(revenus_nets=4200.0, taux_nominal=3.12, taux_assurance=0.20, duree=25)
+        r = self.client.get(reverse('biens_financables'))
+        from .views import taux_pour_duree
+        self.assertEqual(r.context['profil'].taux_nominal, taux_pour_duree(25))
+        self.assertContains(r, 'remis au barème du')
+
+    def test_simulation_du_bareme_courant_gardee(self):
+        from .views import TAUX_DATE
+        self._session(revenus_nets=4200.0, taux_nominal=3.40, taux_assurance=0.20, duree=20,
+                      bareme_date=TAUX_DATE.isoformat())
+        r = self.client.get(reverse('biens_financables'))
+        self.assertEqual(r.context['profil'].taux_nominal, 3.40)
+        self.assertNotContains(r, 'remis au barème du')
+
+    def test_saisie_d_un_ancien_bareme_actualisee(self):
+        self._session(profil_biens={'revenus': 4200.0, 'charges': 0.0, 'apport': 50000.0, 'duree': 25,
+                                    'taux_nominal': 3.12, 'taux_assurance': 0.2, 'primo': True,
+                                    'nb_adultes': 2, 'nb_enfants': 0})
+        r = self.client.get(reverse('biens_financables'))
+        from .views import taux_pour_duree
+        self.assertEqual(r.context['profil'].taux_nominal, taux_pour_duree(25))
+
+    def test_saisie_recente_gardee(self):
+        self.client.post(reverse('biens_financables'), {'revenus': '4200', 'charges': '0', 'apport': '0',
+                         'duree': '20', 'taux_nominal': '3,30', 'taux_assurance': '0.20'})
+        r = self.client.get(reverse('biens_financables'))
+        self.assertEqual(r.context['profil'].taux_nominal, 3.30)

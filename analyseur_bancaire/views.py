@@ -15,6 +15,7 @@ import tempfile
 import os
 import re
 import unicodedata
+import dataclasses
 import json
 
 from . import biens_gino
@@ -1531,6 +1532,7 @@ def simulateur_pret(request):
                 request.session['duree'] = duree
                 request.session['taux_nominal'] = resultat['taux_nominal']
                 request.session['taux_assurance'] = resultat['taux_assurance']
+                request.session['bareme_date'] = TAUX_DATE.isoformat()
                 request.session['nb_adultes'] = nb_adultes
                 request.session['nb_enfants'] = nb_enfants
                 request.session['primo_accedant'] = primo
@@ -2473,11 +2475,27 @@ def _profil_par_defaut():
 
 
 def _profil_biens(session):
-    """Profil de la page : saisie > simulation > défauts. Renvoie (profil, source)."""
+    """Profil de la page : saisie > simulation > défauts. Renvoie (profil, source, actualise).
+
+    Un taux gardé en session (cookie) depuis un ANCIEN barème est remis au barème
+    du jour pour sa durée — règle : toujours les taux les plus récents. `actualise`
+    le signale à l'utilisateur ; la session est corrigée pour ne le dire qu'une fois.
+    """
+    courant = TAUX_DATE.isoformat()
     if session.get('profil_biens'):
-        return biens_gino.Profil(**session['profil_biens']), 'saisie'
+        profil = biens_gino.Profil(**session['profil_biens'])
+        if session.get('profil_biens_bareme') != courant:
+            profil = dataclasses.replace(profil, taux_nominal=taux_pour_duree(profil.duree))
+            session['profil_biens'] = {**session['profil_biens'], 'taux_nominal': profil.taux_nominal}
+            session['profil_biens_bareme'] = courant
+            return profil, 'saisie', True
+        return profil, 'saisie', False
     d = _profil_par_defaut()
     if session.get('revenus_nets'):
+        actualise = session.get('bareme_date') != courant
+        if actualise:
+            session['taux_nominal'] = taux_pour_duree(session.get('duree', d.duree))
+            session['bareme_date'] = courant
         return biens_gino.Profil(
             revenus=session['revenus_nets'], charges=session.get('charges_fixes', 0),
             apport=session.get('apport', 0), duree=session.get('duree', d.duree),
@@ -2485,8 +2503,8 @@ def _profil_biens(session):
             taux_assurance=session.get('taux_assurance', d.taux_assurance),
             primo=session.get('primo_accedant', False),
             nb_adultes=session.get('nb_adultes', 2), nb_enfants=session.get('nb_enfants', 0)
-        ), 'simulation'
-    return d, 'defaut'
+        ), 'simulation', actualise
+    return d, 'defaut', False
 
 
 def biens_financables(request):
@@ -2511,12 +2529,13 @@ def biens_financables(request):
                 'nb_adultes': _entier_positif(p.get('nb_adultes'), 2),
                 'nb_enfants': _entier_positif(p.get('nb_enfants'), 0),
             }
+            request.session['profil_biens_bareme'] = TAUX_DATE.isoformat()
         query = urlencode({'ville': request.POST.get('ville', '')})
         return redirect(f"{reverse('biens_financables')}?{query}")
 
-    profil, source = _profil_biens(request.session)
+    profil, source, taux_actualise = _profil_biens(request.session)
     contexte = {'racine': racine, 'villes': liste or [], 'dossier_introuvable': liste is None,
-                'profil': profil, 'source_profil': source,
+                'profil': profil, 'source_profil': source, 'taux_actualise': taux_actualise,
                 'bareme_durees': bareme_durees()}
     slugs = {v['slug'] for v in liste or []}
     slug = request.GET.get('ville')

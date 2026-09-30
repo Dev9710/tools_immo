@@ -51,6 +51,16 @@
         Tu peux aussi <a href="{% url 'simulateur_pret' %}">faire ta simulation</a> : ses chiffres seront repris ici.</p>
       {% endif %}
       {% include "analyseur/_bareme.html" %}
+      {% if taux_actualise %}
+      <div class="alert alert-info py-2 small">
+        <i class="bi bi-arrow-clockwise"></i> <strong>Taux remis au barème du {{ bareme.date }}</strong>
+        <ul class="mb-0">
+          <li>Ton taux enregistré venait d'un ancien barème.</li>
+          <li>Il est remplacé par le taux moyen du jour pour ta durée.</li>
+          <li>Pour un taux adapté à ton profil, <a href="{% url 'simulateur_pret' %}">refais ta simulation</a>.</li>
+        </ul>
+      </div>
+      {% endif %}
       <form method="post" class="row g-2 align-items-end">
         {% csrf_token %}
         <input type="hidden" name="ville" value="{{ ville.slug }}">
