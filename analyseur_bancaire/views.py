@@ -31,7 +31,7 @@ from . import biens_gino
 # Provence −0,03 ; Rhône-Alpes −0,06 par rapport au national).
 TAUX_DATE = date(2026, 9, 29)
 TAUX_SOURCE = "Meilleurtaux"
-BAREME_VALIDITE_JOURS = 30
+BAREME_VALIDITE_JOURS = 7    # Meilleurtaux publie son baromètre chaque semaine
 TAUX_ACTUELS = {
     'regions': {
         'ile_de_france': {'7': 3.43, '10': 3.48, '15': 3.50, '20': 3.56, '25': 3.65},

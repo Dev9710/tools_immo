@@ -202,7 +202,8 @@ DUPONT/DUPPONT) ou vers l'épargne (Livret, LDDS, PEL…) est marqué `interne` 
 
 **Taux (30/09).** RÈGLE utilisateur : toujours les taux les plus récents. `TAUX_ACTUELS` porte sa
 date (`TAUX_DATE`, `TAUX_SOURCE`) ; `bareme_info()` l'affiche sur toutes les pages (context
-processor) et alerte au-delà de 30 jours. Le taux dépend de la durée : `taux_pour_duree()`
+processor) et alerte au-delà de 7 jours (baromètre hebdomadaire ; lecture automatique
+de Meilleurtaux écartée : la page charge ses vrais chiffres après coup, un lecteur lirait des taux faux). Le taux dépend de la durée : `taux_pour_duree()`
 interpole entre les paliers ; sur « Biens finançables », changer la durée ajuste le taux en
 gardant l'écart au barème (profil, négociation). Les tests lisent la table, jamais un taux en dur.
 

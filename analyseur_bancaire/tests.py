@@ -20,7 +20,7 @@ class BaremesTests(SimpleTestCase):
         self.assertEqual(TAUX_DATE, date(2026, 9, 29))
         frais = bareme_info(date(2026, 10, 5))
         self.assertEqual((frais['date'], frais['perime']), ('29/09/2026', False))
-        self.assertTrue(bareme_info(date(2026, 11, 5))['perime'])   # plus de 30 jours
+        self.assertTrue(bareme_info(date(2026, 10, 7))['perime'])   # plus d'une semaine
 
     def test_date_affichee_sur_les_pages(self):
         for nom in ('simulateur_pret', 'biens_financables'):
