@@ -2543,6 +2543,14 @@ def biens_financables(request):
         slug = liste[0]['slug'] if liste else None    # on retombe sur la première ville connue
     if slug in slugs:   # jamais de chemin construit à partir d'une valeur non listée
         contexte['ville'] = next(v for v in liste if v['slug'] == slug)
-        contexte['analyse'] = biens_gino.analyser_ville(racine / slug, profil,
-                                                        SimulateurPretImmobilier())
+        analyse = biens_gino.analyser_ville(racine / slug, profil, SimulateurPretImmobilier())
+        # Affichage seulement (infobulle de l'écart au prix du m²) : aucun calcul de verdict ici.
+        for b in analyse['biens']:
+            b['prix_m2_affiche'] = (round(b['prix'] / b['surface'])
+                                    if b.get('prix') and b.get('surface') else None)
+        contexte['analyse'] = analyse
+        contexte['mediane_affichee'] = round(analyse['mediane']) if analyse.get('mediane') else None
+    # Mensualité que la règle des 35 % laisse disponible (charges déduites), pour l'en-tête.
+    contexte['mensualite_max'] = (max(0.0, profil.revenus * biens_gino.SEUIL_FINANCABLE / 100 - profil.charges)
+                                  if profil.revenus > 0 else None)
     return render(request, 'analyseur/biens_financables.html', contexte)

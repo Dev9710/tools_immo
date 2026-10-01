@@ -1,2 +1,2 @@
-{% if b.dpe %}<span class="badge dpe dpe-{{ b.dpe }}" title="DPE {{ b.dpe }}">{{ b.dpe }}{% if b.alerte_dpe %} <i class="bi bi-exclamation-triangle-fill" aria-label="passoire énergétique"></i>{% endif %}</span>
-{% else %}<span class="badge bg-light text-muted border">DPE n.c.</span>{% endif %}
+{% if b.dpe %}<span class="dpe dpe-{{ b.dpe }}" title="DPE {{ b.dpe }}{% if b.alerte_dpe %}, passoire énergétique{% endif %}">{{ b.dpe }}{% if b.alerte_dpe %} <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i><span class="visually-hidden"> (passoire énergétique)</span>{% endif %}</span>
+{% else %}<span class="dpe dpe-nc" title="DPE non communiqué">n.c.</span>{% endif %}

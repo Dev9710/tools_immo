@@ -3,57 +3,174 @@
 {% block title %}Biens finançables{% endblock %}
 {% block content %}
 <style>
-  .dpe { color: #fff; min-width: 2rem; }
-  .dpe-A { background: #009c6d; } .dpe-B { background: #52b153; } .dpe-C { background: #78bd76; color: #1b1b1b; }
-  .dpe-D { background: #f4e70f; color: #1b1b1b; } .dpe-E { background: #f0b40f; color: #1b1b1b; }
-  .dpe-F { background: #eb8235; color: #1b1b1b; } .dpe-G { background: #d7221f; }
-</style>
-<div class="container py-4">
+  /* Jetons de la page — portée .bf, aucune autre page touchée.
+     Direction : outil financier sobre et rassurant (audit UI UX Pro Max « Accessible & Ethical »,
+     référence docs/design/DESIGN-stripe.md : encre bleu nuit, un seul accent, chiffres tabulaires). */
+  .bf {
+    --ink: #0d253d; --ink-2: #273951; --mute: #5b6b82;
+    --hair: #e3e8ee; --canvas: #ffffff; --soft: #f6f9fc;
+    --brand: #1e40af; --brand-soft: #eef2ff; --focus: #93b4ff;
+    --ok: #047857; --ok-bg: #ecfdf5; --warn: #92400e; --warn-bg: #fffbeb; --warn-dot: #d97706;
+    --ko: #b91c1c; --ko-bg: #fef2f2;
+    color: var(--ink); background: var(--soft);
+  }
+  .bf .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bf .mute { color: var(--mute); }
+  .bf .panel { background: var(--canvas); border: 1px solid var(--hair); border-radius: 14px; }
+  .bf h1 { text-wrap: balance; }
+  .bf a { color: var(--brand); }
+  .bf :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
-  <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
-    <h1 class="h3 mb-0"><i class="bi bi-house-check"></i> Biens finançables</h1>
+  /* Le budget d'abord */
+  .bf .etiquette { font-size: .8rem; letter-spacing: .02em; color: var(--mute); font-weight: 500; }
+  .bf .budget { font-size: 2.6rem; font-weight: 300; letter-spacing: -.03em; line-height: 1.1; }
+  .bf .budget small { font-size: 1.1rem; color: var(--mute); font-weight: 400; letter-spacing: 0; }
+
+  /* Répartition des verdicts = filtres */
+  .bf .seg { display: flex; gap: .5rem; flex-wrap: wrap; }
+  .bf .seg button { border: 1px solid var(--hair); background: var(--canvas); color: var(--ink);
+    border-radius: 10px; padding: .55rem .9rem; text-align: left; min-width: 9.5rem; min-height: 44px;
+    touch-action: manipulation; transition: border-color .15s ease-out, background-color .15s ease-out; }
+  .bf .seg button:hover { border-color: #b8c4d4; }
+  .bf .seg button[aria-pressed="true"] { border-color: var(--brand); background: var(--brand-soft); }
+  .bf .seg .n { font-size: 1.4rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .bf .pastille { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%; margin-right: .35rem; }
+
+  /* Profil replié en une ligne */
+  .bf details.profil > summary { list-style: none; cursor: pointer; }
+  .bf details.profil > summary::-webkit-details-marker { display: none; }
+  .bf .resume-profil { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; flex: 1 1 30rem; min-width: 0; }
+  .bf .resume-profil b { font-weight: 600; }
+  .bf details.profil[open] .bouton-modifier .ouvrir, .bf details.profil:not([open]) .bouton-modifier .fermer { display: none; }
+
+  /* Pastilles verdict / DPE */
+  .bf .verdict { display: inline-flex; align-items: center; gap: .35rem; font-size: .8rem; font-weight: 600;
+    padding: .25rem .55rem; border-radius: 6px; white-space: nowrap; }
+  .bf .v-financable { color: var(--ok); background: var(--ok-bg); }
+  .bf .v-limite { color: var(--warn); background: var(--warn-bg); }
+  .bf .v-hors_budget { color: var(--ko); background: var(--ko-bg); }
+  .bf .v-aucun { color: var(--mute); background: var(--soft); border: 1px solid var(--hair); }
+  .bf .dpe { display: inline-block; min-width: 1.7rem; text-align: center; font-weight: 700; font-size: .8rem;
+    border-radius: 5px; padding: .15rem .35rem; white-space: nowrap; }
+  .bf .dpe-A { background: #009c6d; color: #fff; } .bf .dpe-B { background: #3f9c46; color: #fff; }
+  .bf .dpe-C { background: #78bd76; color: #10240f; } .bf .dpe-D { background: #f4e70f; color: #1b1b1b; }
+  .bf .dpe-E { background: #f0b40f; color: #1b1b1b; } .bf .dpe-F { background: #eb8235; color: #1b1b1b; }
+  .bf .dpe-G { background: #d7221f; color: #fff; } .bf .dpe-nc { background: var(--soft); color: var(--mute); border: 1px solid var(--hair); }
+  .bf .ecart { font-size: .85rem; white-space: nowrap; }
+  .bf .ecart-bas { color: var(--ok); } .bf .ecart-haut { color: var(--mute); }
+
+  /* Barre de filtres */
+  .bf .filtres { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem 1rem; }
+  .bf .filtres .form-control { width: 7rem; } .bf .filtres .form-select { width: 10rem; }
+
+  /* Tableau */
+  .bf .table { margin: 0; --bs-table-hover-bg: #f8fbff; }
+  .bf .table > :not(:first-child) { border-top: 0; }
+  .bf thead th { font-size: .78rem; font-weight: 600; color: var(--mute); background: var(--soft);
+    border-bottom: 1px solid var(--hair); white-space: nowrap; position: sticky; top: 0; z-index: 1; }
+  .bf th[data-tri] { cursor: pointer; user-select: none; }
+  .bf th[data-tri]:hover, .bf th[aria-sort] { color: var(--ink); }
+  .bf th .sens { opacity: 0; }
+  .bf th[aria-sort] .sens { opacity: 1; }
+  .bf th[aria-sort="descending"] .sens { display: inline-block; transform: rotate(180deg); }
+  .bf tbody td { border-color: var(--hair); padding-top: .8rem; padding-bottom: .8rem; }
+  .bf .bien-titre { font-weight: 600; }
+  .bf .bien-sous { font-size: .85rem; color: var(--mute); }
+  .bf .eur { color: var(--mute); font-size: .85em; margin-left: .15rem; }
+  .bf .lien-annonce { display: inline-flex; min-width: 2.25rem; height: 2.25rem; align-items: center; justify-content: center;
+    gap: .25rem; border-radius: 8px; text-decoration: none; font-size: .8rem; padding: 0 .4rem; }
+  .bf .lien-annonce:hover { background: var(--brand-soft); }
+
+  /* Cartes mobile */
+  .bf .carte { background: var(--canvas); border: 1px solid var(--hair); border-radius: 12px; padding: .85rem 1rem; }
+
+  @media (prefers-reduced-motion: reduce) { .bf * { transition: none !important; } }
+</style>
+
+<div class="bf">
+<div class="container py-4" style="max-width: 1200px;">
+
+  <div class="d-flex flex-wrap align-items-baseline gap-3 mb-3">
+    <h1 class="h3 mb-0">Biens finançables</h1>
     {% if villes %}
-    <form method="get" class="d-flex align-items-center gap-2">
+    <form method="get" id="choix-ville">
       <label for="ville" class="visually-hidden">Ville</label>
-      <select id="ville" name="ville" class="form-select" onchange="this.form.submit()">
+      <select id="ville" name="ville" class="form-select form-select-sm w-auto">
         {% for v in villes %}<option value="{{ v.slug }}" {% if ville.slug == v.slug %}selected{% endif %}>{{ v.nom }}</option>{% endfor %}
       </select>
+      <noscript><button class="btn btn-sm btn-outline-primary ms-1">Afficher</button></noscript>
     </form>
     {% endif %}
-    {% if analyse.date_releve %}<span class="text-muted small">Biens relevés le {{ analyse.date_releve|date:"d/m/Y" }}</span>{% endif %}
+    {% if analyse.date_releve %}<span class="mute small">{{ analyse.resume.total }} bien{{ analyse.resume.total|pluralize }} relevé{{ analyse.resume.total|pluralize }} le {{ analyse.date_releve|date:"d/m/Y" }}</span>{% endif %}
   </div>
 
   {% if dossier_introuvable %}
   <div class="alert alert-warning">
-    <p class="fw-bold mb-1"><i class="bi bi-folder-x"></i> Je ne trouve pas les résultats de Gino.</p>
+    <p class="fw-bold mb-1"><i class="bi bi-folder-x" aria-hidden="true"></i> Je ne trouve pas les résultats de Gino.</p>
     <ul class="mb-0">
-      <li>Dossier cherché : <code>{{ racine }}</code></li>
-      <li>Indique le bon dossier avec la variable <code>AGENCE_IMMO_DIR</code>, puis relance tools_immo.</li>
+      <li>Dossier cherché : <code translate="no">{{ racine }}</code></li>
+      <li>Indique le bon dossier avec la variable <code translate="no">AGENCE_IMMO_DIR</code>, puis relance tools_immo.</li>
     </ul>
   </div>
   {% elif not villes %}
   <div class="alert alert-info">
-    <p class="fw-bold mb-1"><i class="bi bi-info-circle"></i> Aucune ville relevée pour l'instant.</p>
+    <p class="fw-bold mb-1"><i class="bi bi-info-circle" aria-hidden="true"></i> Aucune ville relevée pour l'instant.</p>
     <ul class="mb-0"><li>Lance Gino sur une ville, puis reviens ici.</li></ul>
   </div>
   {% endif %}
 
-  <div class="card mb-3">
-    <div class="card-header d-flex justify-content-between align-items-center">
-      <span class="fw-bold"><i class="bi bi-person-badge"></i> Ton profil</span>
-      {% if source_profil == 'simulation' %}<span class="badge bg-success">repris de ta simulation</span>
-      {% elif source_profil == 'saisie' %}<span class="badge bg-primary">ta saisie</span>
-      {% else %}<span class="badge bg-secondary">valeurs par défaut, à ajuster</span>{% endif %}
+  {# ---------- 1. Le budget, en premier ---------- #}
+  {% if analyse and analyse.resume.total %}
+  <section class="panel p-4 mb-3" aria-labelledby="titre-budget">
+    <div class="row g-4 align-items-center">
+      <div class="col-lg-5">
+        <h2 id="titre-budget" class="etiquette mb-1">Prix maximum que tu peux viser</h2>
+        <div class="budget num">{% if analyse.resume.prix_max %}{{ analyse.resume.prix_max|floatformat:0|intcomma }}<small> €</small>{% else %}—{% endif %}</div>
+        <ul class="mute small mb-0 mt-2 ps-3">
+          <li>Calculé sur tes revenus actuels, hors reste à vivre.</li>
+          {% if mensualite_max %}<li>Mensualité maximum : <b class="num">{{ mensualite_max|floatformat:0|intcomma }} €/mois</b> (35 % de tes revenus, charges déduites).</li>{% endif %}
+        </ul>
+      </div>
+      <div class="col-lg-7">
+        <div class="etiquette mb-2">Les biens de {{ ville.nom }} face à ton budget — clique pour filtrer</div>
+        <div class="seg" role="group" aria-label="Filtrer par verdict" id="filtre-verdict">
+          <button type="button" aria-pressed="false" data-verdict="financable"><div><span class="pastille" style="background:var(--ok)" aria-hidden="true"></span>Finançables</div><div class="n">{{ analyse.resume.financable }}</div></button>
+          <button type="button" aria-pressed="false" data-verdict="limite"><div><span class="pastille" style="background:var(--warn-dot)" aria-hidden="true"></span>Limites</div><div class="n">{{ analyse.resume.limite }}</div></button>
+          <button type="button" aria-pressed="false" data-verdict="hors_budget"><div><span class="pastille" style="background:var(--ko)" aria-hidden="true"></span>Hors budget</div><div class="n">{{ analyse.resume.hors_budget }}</div></button>
+        </div>
+      </div>
     </div>
-    <div class="card-body">
+  </section>
+  {% endif %}
+
+  {# ---------- 2. Le profil, replié en une ligne ---------- #}
+  <details class="profil panel mb-3" {% if profil.revenus <= 0 or taux_actualise or source_profil == 'defaut' %}open{% endif %}>
+    <summary class="px-4 py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <span class="resume-profil num">
+        <span class="fw-semibold"><i class="bi bi-person-badge" aria-hidden="true"></i> Ton profil</span>
+        <span>Revenus <b>{{ profil.revenus|floatformat:0|intcomma }} €/mois</b></span>
+        <span>Charges <b>{{ profil.charges|floatformat:0|intcomma }} €</b></span>
+        <span>Apport <b>{{ profil.apport|floatformat:0|intcomma }} €</b></span>
+        <span>Durée <b>{{ profil.duree }} ans</b></span>
+        <span>Taux <b>{{ profil.taux_nominal|floatformat:2 }} %</b> + assurance <b>{{ profil.taux_assurance|floatformat:2 }} %</b></span>
+        {% if profil.primo %}<span>Primo-accédant</span>{% endif %}
+      </span>
+      <span class="d-flex align-items-center gap-2">
+        {% if source_profil == 'simulation' %}<span class="badge rounded-pill text-bg-light border text-success">repris de ta simulation</span>
+        {% elif source_profil == 'saisie' %}<span class="badge rounded-pill text-bg-light border text-primary">ta saisie</span>
+        {% else %}<span class="badge rounded-pill text-bg-light border text-secondary">valeurs par défaut, à ajuster</span>{% endif %}
+        <span class="btn btn-sm btn-outline-primary bouton-modifier"><span class="ouvrir"><i class="bi bi-pencil" aria-hidden="true"></i> Modifier mon profil</span><span class="fermer"><i class="bi bi-chevron-up" aria-hidden="true"></i> Replier</span></span>
+      </span>
+    </summary>
+    <div class="px-4 pb-4">
       {% if profil.revenus <= 0 %}
-      <p class="mb-3"><i class="bi bi-arrow-right-circle"></i> Complète ton profil pour voir ce que tu peux financer.
+      <p class="mb-3"><i class="bi bi-arrow-right-circle" aria-hidden="true"></i> Complète ton profil pour voir ce que tu peux financer.
         Tu peux aussi <a href="{% url 'simulateur_pret' %}">faire ta simulation</a> : ses chiffres seront repris ici.</p>
       {% endif %}
       {% include "analyseur/_bareme.html" %}
       {% if taux_actualise %}
       <div class="alert alert-info py-2 small">
-        <i class="bi bi-arrow-clockwise"></i> <strong>Taux remis au barème du {{ bareme.date }}</strong>
+        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> <strong>Taux remis au barème du {{ bareme.date }}</strong>
         <ul class="mb-0">
           <li>Ton taux enregistré venait d'un ancien barème.</li>
           <li>Il est remplacé par le taux moyen du jour pour ta durée.</li>
@@ -65,120 +182,124 @@
         {% csrf_token %}
         <input type="hidden" name="ville" value="{{ ville.slug }}">
         <div class="col-6 col-md-2"><label class="form-label small" for="revenus">Revenus nets / mois</label>
-          <input class="form-control" id="revenus" name="revenus" type="number" step="10" value="{{ profil.revenus|floatformat:0 }}"></div>
+          <input class="form-control" id="revenus" name="revenus" type="number" inputmode="numeric" autocomplete="off" step="10" value="{{ profil.revenus|floatformat:0|unlocalize }}"></div>
         <div class="col-6 col-md-2"><label class="form-label small" for="charges">Charges / mois</label>
-          <input class="form-control" id="charges" name="charges" type="number" step="10" value="{{ profil.charges|floatformat:0 }}"></div>
+          <input class="form-control" id="charges" name="charges" type="number" inputmode="numeric" autocomplete="off" step="10" value="{{ profil.charges|floatformat:0|unlocalize }}"></div>
         <div class="col-6 col-md-2"><label class="form-label small" for="apport">Apport</label>
-          <input class="form-control" id="apport" name="apport" type="number" step="1000" value="{{ profil.apport|floatformat:0 }}"></div>
+          <input class="form-control" id="apport" name="apport" type="number" inputmode="numeric" autocomplete="off" step="1000" value="{{ profil.apport|floatformat:0|unlocalize }}"></div>
         <div class="col-6 col-md-1"><label class="form-label small" for="duree">Durée (ans)</label>
-          <input class="form-control" id="duree" name="duree" type="number" min="5" max="30" value="{{ profil.duree }}"></div>
+          <input class="form-control" id="duree" name="duree" type="number" inputmode="numeric" autocomplete="off" min="5" max="30" value="{{ profil.duree }}"></div>
         <div class="col-6 col-md-1"><label class="form-label small" for="taux_nominal">Taux %</label>
-          <input class="form-control" id="taux_nominal" name="taux_nominal" type="number" step="0.01" value="{{ profil.taux_nominal|stringformat:'.2f' }}"></div>
+          <input class="form-control" id="taux_nominal" name="taux_nominal" type="number" inputmode="decimal" autocomplete="off" step="0.01" value="{{ profil.taux_nominal|stringformat:'.2f' }}"></div>
         <div class="col-6 col-md-1"><label class="form-label small" for="taux_assurance">Assurance %</label>
-          <input class="form-control" id="taux_assurance" name="taux_assurance" type="number" step="0.01" value="{{ profil.taux_assurance|stringformat:'.2f' }}"></div>
+          <input class="form-control" id="taux_assurance" name="taux_assurance" type="number" inputmode="decimal" autocomplete="off" step="0.01" value="{{ profil.taux_assurance|stringformat:'.2f' }}"></div>
         <input type="hidden" name="nb_adultes" value="{{ profil.nb_adultes }}">
         <input type="hidden" name="nb_enfants" value="{{ profil.nb_enfants }}">
         <div class="col-6 col-md-1 form-check ms-2">
           <input class="form-check-input" type="checkbox" id="primo" name="primo" {% if profil.primo %}checked{% endif %}>
           <label class="form-check-label small" for="primo">Primo-accédant</label></div>
         <div class="col-12 col-md-auto">
-          <button class="btn btn-primary"><i class="bi bi-arrow-repeat"></i> Recalculer</button>
+          <button class="btn btn-primary"><i class="bi bi-arrow-repeat" aria-hidden="true"></i> Recalculer</button>
           {% if source_profil == 'saisie' %}<button class="btn btn-link" name="action" value="reprendre">Reprendre ma simulation</button>{% endif %}
         </div>
       </form>
-      <p id="note-taux-duree" class="small text-primary mt-2 mb-0" hidden><i class="bi bi-info-circle"></i> Taux ajusté à la nouvelle durée : plus un prêt est long, plus son taux est élevé. Clique sur « Recalculer ».</p>
+      <p id="note-taux-duree" class="small text-primary mt-2 mb-0" hidden aria-live="polite"><i class="bi bi-info-circle" aria-hidden="true"></i> Taux ajusté à la nouvelle durée : plus un prêt est long, plus son taux est élevé. Clique sur « Recalculer ».</p>
       {% include "analyseur/_aide_memoire.html" %}
     </div>
-  </div>
+  </details>
 
   {% if analyse.resume.total == 0 %}
   <div class="alert alert-info">
-    <p class="fw-bold mb-1"><i class="bi bi-info-circle"></i> Aucun bien trouvé pour {{ ville.nom }}.</p>
+    <p class="fw-bold mb-1"><i class="bi bi-info-circle" aria-hidden="true"></i> Aucun bien trouvé pour {{ ville.nom }}.</p>
     <ul class="mb-0">
       <li>Lance Gino sur une agence de cette ville pour récupérer des biens.</li>
       <li>Reviens ensuite sur cette page : elle se mettra à jour toute seule.</li>
     </ul>
   </div>
   {% elif analyse %}
-  <div class="row g-2 mb-3 text-center">
-    <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="h4 mb-0 text-success">{{ analyse.resume.financable }}</div><div class="small">finançables</div></div></div>
-    <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="h4 mb-0 text-warning">{{ analyse.resume.limite }}</div><div class="small">limites</div></div></div>
-    <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="h4 mb-0 text-danger">{{ analyse.resume.hors_budget }}</div><div class="small">hors budget</div></div></div>
-    <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="h4 mb-0">{% if analyse.resume.prix_max %}{{ analyse.resume.prix_max|floatformat:0|intcomma }} €{% else %}—{% endif %}</div><div class="small">prix maximum finançable</div><div class="small text-muted">calculé sur tes revenus actuels, hors reste à vivre</div></div></div>
-  </div>
 
-  <ul class="small text-muted mb-3">
-    <li>Coût mensuel hors charges de copropriété et taxe foncière.</li>
-    {% if analyse.masques %}<li>{{ analyse.masques }} bien{{ analyse.masques|pluralize }} vendu{{ analyse.masques|pluralize }} ou sous compromis masqué{{ analyse.masques|pluralize }}.</li>{% endif %}
-    {% for f in analyse.ignores %}<li>Fichier ignoré, illisible : <code>{{ f }}</code></li>{% endfor %}
-  </ul>
-
-  <form id="filtres" class="row g-2 mb-3 align-items-end" onsubmit="return false">
-    <fieldset class="col-12 col-md-auto">
-      <legend class="form-label small mb-1">Verdict</legend>
-      <div class="btn-group" role="group">
-        <input type="checkbox" class="btn-check" id="f-financable" value="financable" name="verdict"><label class="btn btn-outline-success btn-sm" for="f-financable">Finançable</label>
-        <input type="checkbox" class="btn-check" id="f-limite" value="limite" name="verdict"><label class="btn btn-outline-warning btn-sm" for="f-limite">Limite</label>
-        <input type="checkbox" class="btn-check" id="f-hors" value="hors_budget" name="verdict"><label class="btn btn-outline-danger btn-sm" for="f-hors">Hors budget</label>
-      </div>
-    </fieldset>
-    <div class="col-6 col-md-2"><label class="form-label small" for="f-type">Type</label>
-      <select id="f-type" class="form-select form-select-sm"><option value="">Tous</option><option>Appartement</option><option>Maison</option></select></div>
-    <div class="col-6 col-md-2"><label class="form-label small" for="f-surface">Surface min (m²)</label><input id="f-surface" type="number" class="form-control form-control-sm"></div>
-    <div class="col-6 col-md-2"><label class="form-label small" for="f-pieces">Pièces min</label><input id="f-pieces" type="number" class="form-control form-control-sm"></div>
-    <div class="col-6 col-md-2"><label class="form-label small" for="f-chambres">Chambres min</label><input id="f-chambres" type="number" class="form-control form-control-sm"></div>
-    <div class="col-12 col-md-auto"><button type="reset" class="btn btn-link btn-sm" id="f-reset">Réinitialiser les filtres</button></div>
+  {# ---------- 3. Filtres ---------- #}
+  <form id="filtres" class="filtres mb-2" onsubmit="return false" aria-label="Filtrer les biens">
+    <div><label class="form-label small mute mb-1" for="f-type">Type</label>
+      <select id="f-type" class="form-select form-select-sm"><option value="">Tous les biens</option><option>Appartement</option><option>Maison</option></select></div>
+    <div><label class="form-label small mute mb-1" for="f-surface">Surface min</label>
+      <div class="input-group input-group-sm"><input id="f-surface" type="number" inputmode="numeric" autocomplete="off" class="form-control"><span class="input-group-text">m²</span></div></div>
+    <div><label class="form-label small mute mb-1" for="f-pieces">Pièces min</label><input id="f-pieces" type="number" inputmode="numeric" autocomplete="off" class="form-control form-control-sm"></div>
+    <div><label class="form-label small mute mb-1" for="f-chambres">Chambres min</label><input id="f-chambres" type="number" inputmode="numeric" autocomplete="off" class="form-control form-control-sm"></div>
+    <button type="reset" class="btn btn-link btn-sm px-0" id="f-reset">Réinitialiser les filtres</button>
+    <span class="ms-auto small mute" aria-live="polite"><b class="num text-body" id="compte">{{ analyse.biens|length }}</b> bien{{ analyse.biens|length|pluralize }} affiché{{ analyse.biens|length|pluralize }}</span>
   </form>
 
-  <p id="aucun" class="alert alert-light d-none"><i class="bi bi-search"></i> Aucun bien ne correspond. Élargis la surface ou les pièces, ou réinitialise les filtres.</p>
+  <p id="aucun" class="alert alert-light border d-none"><i class="bi bi-search" aria-hidden="true"></i> Aucun bien ne correspond. Élargis la surface ou les pièces, ou réinitialise les filtres.</p>
 
-  <div class="table-responsive d-none d-md-block">
+  {# ---------- 4. Tableau (ordinateur) ---------- #}
+  <div class="panel overflow-hidden d-none d-md-block">
     <table class="table table-hover align-middle" id="table-biens">
-      <thead class="table-light sticky-top"><tr>
-        <th data-tri="verdict" aria-sort="ascending" role="button" tabindex="0">Verdict</th>
-        <th>Bien</th>
-        <th class="text-end" data-tri="prix" role="button" tabindex="0">Prix</th>
-        <th class="text-end" data-tri="mensualite" role="button" tabindex="0">Mensualité</th>
-        <th class="text-end" data-tri="endettement" role="button" tabindex="0">Endettement</th>
-        <th class="text-end" data-tri="ecart" role="button" tabindex="0">Prix/m² vs ville</th>
-        <th>DPE</th><th>Agences</th><th>Annonce</th>
+      <caption class="visually-hidden">Biens de {{ ville.nom }}, avec leur coût mensuel et le verdict de financement</caption>
+      <thead><tr>
+        <th scope="col" class="ps-4" data-tri="verdict" aria-sort="ascending" tabindex="0">Verdict <i class="bi bi-arrow-down-short sens" aria-hidden="true"></i></th>
+        <th scope="col">Bien</th>
+        <th scope="col" class="text-end" data-tri="prix" tabindex="0">Prix <i class="bi bi-arrow-down-short sens" aria-hidden="true"></i></th>
+        <th scope="col" class="text-end" data-tri="mensualite" tabindex="0">Coût par mois <i class="bi bi-arrow-down-short sens" aria-hidden="true"></i></th>
+        <th scope="col" class="text-end" data-tri="ecart" tabindex="0">vs prix du m² à {{ ville.nom }} <i class="bi bi-arrow-down-short sens" aria-hidden="true"></i></th>
+        <th scope="col" class="text-center">DPE</th>
+        <th scope="col" class="pe-4"><span class="visually-hidden">Annonce</span></th>
       </tr></thead>
       <tbody>
       {% for b in analyse.biens %}
       <tr class="bien" data-verdict="{{ b.verdict|default:'' }}" data-type="{{ b.type }}" data-surface="{{ b.surface|default:0|unlocalize }}" data-pieces="{{ b.pieces|default:0 }}" data-chambres="{{ b.chambres|default:0 }}" data-prix="{{ b.prix|default:0|unlocalize }}" data-mensualite="{{ b.mensualite|default:0|unlocalize }}" data-endettement="{{ b.endettement|default:0|unlocalize }}" data-ecart="{{ b.ecart_m2|default_if_none:9|unlocalize }}" data-ordre="{{ forloop.counter }}">
-        <td>{% include 'analyseur/_verdict.html' %}</td>
-        <td>{{ b.type }}{% if b.pieces %} {{ b.pieces }} p.{% endif %} · {{ b.lieu }}{% if b.surface %} · {{ b.surface|floatformat:0 }} m²{% endif %}{% if b.chambres %} · {{ b.chambres }} ch.{% endif %}{% if b.neuf %} <span class="badge bg-info text-dark">neuf</span>{% endif %}</td>
-        <td class="text-end font-monospace">{% if b.prix %}{{ b.prix|floatformat:0|intcomma }} €{% else %}<span class="text-muted">prix non affiché</span>{% endif %}</td>
-        <td class="text-end font-monospace">{% if b.mensualite is not None %}{{ b.mensualite|floatformat:0|intcomma }} €/mois{% else %}—{% endif %}</td>
-        <td class="text-end font-monospace">{% if b.endettement is not None %}{{ b.endettement|floatformat:1 }} %{% else %}—{% endif %}</td>
+        <td class="ps-4">{% include 'analyseur/_verdict.html' %}</td>
+        <td>
+          <div class="bien-titre">{{ b.type }}{% if b.pieces %} {{ b.pieces }} p.{% endif %}{% if b.surface %} · <span class="num">{{ b.surface|floatformat:0 }} m²</span>{% endif %}{% if b.chambres %} · {{ b.chambres }} ch.{% endif %}{% if b.neuf %} <span class="badge text-bg-info">neuf</span>{% endif %}</div>
+          <div class="bien-sous">{{ b.lieu }} · {{ b.agences|join:" + " }}{% if b.annee %} · {{ b.annee }}{% endif %}</div>
+        </td>
+        <td class="text-end num fw-semibold">{% if b.prix %}{{ b.prix|floatformat:0|intcomma }}<span class="eur">€</span>{% else %}<span class="mute fw-normal">prix non affiché</span>{% endif %}</td>
+        <td class="text-end num">{% if b.mensualite is not None %}{{ b.mensualite|floatformat:0|intcomma }}<span class="eur">€</span><div class="bien-sous">{{ b.endettement|floatformat:0 }} % d'endettement</div>{% else %}<span class="mute">—</span>{% endif %}</td>
         <td class="text-end">{% include 'analyseur/_ecart.html' %}</td>
-        <td>{% include 'analyseur/_dpe.html' %}</td>
-        <td class="small">{{ b.agences|join:" + " }}</td>
-        <td>{% for a in b.annonces %}<a href="{{ a.url }}" target="_blank" rel="noopener" class="d-block small">Voir{% if b.annonces|length > 1 %} ({{ a.agence }}){% endif %}</a>{% endfor %}</td>
+        <td class="text-center">{% include 'analyseur/_dpe.html' %}</td>
+        <td class="pe-4 text-end">{% for a in b.annonces %}<a class="lien-annonce" href="{{ a.url }}" target="_blank" rel="noopener" aria-label="Voir l'annonce chez {{ a.agence }} (nouvel onglet)" title="Annonce chez {{ a.agence }}"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>{% if b.annonces|length > 1 %}<span class="small">{{ forloop.counter }}</span>{% endif %}</a>{% endfor %}</td>
       </tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
 
+  {# ---------- 5. Cartes (mobile) ---------- #}
   <div class="d-md-none">
     {% for b in analyse.biens %}
-    <div class="card mb-2 bien" data-verdict="{{ b.verdict|default:'' }}" data-type="{{ b.type }}" data-surface="{{ b.surface|default:0|unlocalize }}" data-pieces="{{ b.pieces|default:0 }}" data-chambres="{{ b.chambres|default:0 }}">
-      <div class="card-body py-2">
-        <div class="d-flex justify-content-between">{% include 'analyseur/_verdict.html' %}{% include 'analyseur/_dpe.html' %}</div>
-        <div class="fw-bold mt-1">{{ b.type }}{% if b.pieces %} {{ b.pieces }} p.{% endif %} · {{ b.lieu }}{% if b.surface %} · {{ b.surface|floatformat:0 }} m²{% endif %}</div>
-        <div>{% if b.prix %}{{ b.prix|floatformat:0|intcomma }} €{% else %}prix non affiché{% endif %}{% if b.mensualite is not None %} · {{ b.mensualite|floatformat:0|intcomma }} €/mois · {{ b.endettement|floatformat:1 }} %{% endif %}</div>
-        <div class="small">{% include 'analyseur/_ecart.html' %} · {{ b.agences|join:" + " }}
-          {% for a in b.annonces %} · <a href="{{ a.url }}" target="_blank" rel="noopener">Voir</a>{% endfor %}</div>
+    <article class="carte mb-2 bien" data-verdict="{{ b.verdict|default:'' }}" data-type="{{ b.type }}" data-surface="{{ b.surface|default:0|unlocalize }}" data-pieces="{{ b.pieces|default:0 }}" data-chambres="{{ b.chambres|default:0 }}">
+      <div class="d-flex justify-content-between align-items-center">{% include 'analyseur/_verdict.html' %}{% include 'analyseur/_dpe.html' %}</div>
+      <div class="d-flex justify-content-between align-items-baseline mt-2">
+        <span class="num fw-semibold fs-5">{% if b.prix %}{{ b.prix|floatformat:0|intcomma }}<span class="eur">€</span>{% else %}<span class="mute fs-6 fw-normal">prix non affiché</span>{% endif %}</span>
+        {% if b.mensualite is not None %}<span class="num small">{{ b.mensualite|floatformat:0|intcomma }} €/mois · {{ b.endettement|floatformat:0 }} %</span>{% endif %}
       </div>
-    </div>
+      <div class="bien-titre mt-1">{{ b.type }}{% if b.pieces %} {{ b.pieces }} p.{% endif %}{% if b.surface %} · {{ b.surface|floatformat:0 }} m²{% endif %}{% if b.chambres %} · {{ b.chambres }} ch.{% endif %}</div>
+      <div class="bien-sous">{{ b.lieu }} · {{ b.agences|join:" + " }}</div>
+      <div class="d-flex justify-content-between align-items-center mt-1">
+        {% include 'analyseur/_ecart.html' %}
+        <span>{% for a in b.annonces %}<a class="lien-annonce" href="{{ a.url }}" target="_blank" rel="noopener" aria-label="Voir l'annonce chez {{ a.agence }} (nouvel onglet)">Voir <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>{% endfor %}</span>
+      </div>
+    </article>
     {% endfor %}
   </div>
+
+  <ul class="small mute mt-3 mb-0">
+    <li>Coût par mois = mensualité du crédit, assurance comprise, hors charges de copropriété et taxe foncière.</li>
+    {% if analyse.masques %}<li>{{ analyse.masques }} bien{{ analyse.masques|pluralize }} vendu{{ analyse.masques|pluralize }} ou sous compromis masqué{{ analyse.masques|pluralize }}.</li>{% endif %}
+    {% for f in analyse.ignores %}<li>Fichier ignoré, illisible : <code>{{ f }}</code></li>{% endfor %}
+  </ul>
   {% endif %}
+</div>
 </div>
 
 {{ bareme_durees|json_script:"bareme-durees" }}
 <script>
+// Changer de ville recharge la page (sans onchange en ligne).
+(function () {
+  const choix = document.getElementById('choix-ville');
+  if (choix) choix.querySelector('select').addEventListener('change', () => choix.submit());
+})();
+
 // Le taux dépend de la durée : quand la durée change, le taux suit le barème en
 // gardant ton écart (profil, négociation). Tu peux toujours saisir un autre taux.
 (function () {
@@ -200,13 +321,15 @@
 })();
 </script>
 <script>
+// Filtres instantanés (verdict par les compteurs, type, surface, pièces, chambres) et tri.
 (function () {
   const f = document.getElementById('filtres');
   if (!f) return;
   const biens = [...document.querySelectorAll('.bien')];
+  const boutons = [...document.querySelectorAll('#filtre-verdict button')];
   const num = (el, k) => parseFloat(el.dataset[k] || '0');
   function filtrer() {
-    const verdicts = [...f.querySelectorAll('[name=verdict]:checked')].map(c => c.value);
+    const verdicts = boutons.filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.dataset.verdict);
     const type = document.getElementById('f-type').value;
     const smin = +document.getElementById('f-surface').value || 0;
     const pmin = +document.getElementById('f-pieces').value || 0;
@@ -219,10 +342,18 @@
       el.classList.toggle('d-none', !ok);
       if (ok && el.tagName === 'TR') vus++;
     });
+    document.getElementById('compte').textContent = vus;
     document.getElementById('aucun').classList.toggle('d-none', vus > 0);
   }
+  boutons.forEach(b => b.addEventListener('click', () => {
+    b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+    filtrer();
+  }));
   f.addEventListener('input', filtrer);
-  document.getElementById('f-reset').addEventListener('click', () => setTimeout(filtrer));
+  document.getElementById('f-reset').addEventListener('click', () => {
+    boutons.forEach(b => b.setAttribute('aria-pressed', 'false'));
+    setTimeout(filtrer);
+  });
   const corps = document.querySelector('#table-biens tbody');
   function trier(th) {
     const cle = th.dataset.tri === 'verdict' ? 'ordre' : th.dataset.tri;
@@ -235,10 +366,7 @@
   document.querySelectorAll('#table-biens th[data-tri]').forEach(th => {
     th.addEventListener('click', () => trier(th));
     th.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
-        e.preventDefault();
-        trier(th);
-      }
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') { e.preventDefault(); trier(th); }
     });
   });
 })();

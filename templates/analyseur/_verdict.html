@@ -1,4 +1,4 @@
-{% if b.verdict == 'financable' %}<span class="badge bg-success"><i class="bi bi-check-circle"></i> Finançable</span>
-{% elif b.verdict == 'limite' %}<span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i> Limite</span>
-{% elif b.verdict == 'hors_budget' %}<span class="badge bg-danger"><i class="bi bi-x-circle"></i> Hors budget</span>
-{% else %}<span class="badge bg-light text-muted border"><i class="bi bi-dash-circle"></i> Non calculé</span>{% endif %}
+{% if b.verdict == 'financable' %}<span class="verdict v-financable"><i class="bi bi-check-circle-fill" aria-hidden="true"></i>Finançable</span>
+{% elif b.verdict == 'limite' %}<span class="verdict v-limite"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>Limite</span>
+{% elif b.verdict == 'hors_budget' %}<span class="verdict v-hors_budget"><i class="bi bi-x-circle-fill" aria-hidden="true"></i>Hors budget</span>
+{% else %}<span class="verdict v-aucun"><i class="bi bi-dash-circle" aria-hidden="true"></i>Non calculé</span>{% endif %}
