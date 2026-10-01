@@ -8,23 +8,23 @@ from .views import FRAIS_NOTAIRE, TAUX_ACTUELS, SimulateurPretImmobilier
 
 class BaremesTests(SimpleTestCase):
     def test_taux_fin_septembre_2026(self):
-        # Meilleurtaux 29/09/2026, profil « bon » = notre « moyen » national
-        self.assertEqual(TAUX_ACTUELS['regions']['autre']['20'], 3.64)
-        self.assertEqual(TAUX_ACTUELS['regions']['autre']['25'], 3.73)
-        self.assertEqual(TAUX_ACTUELS['regions']['ile_de_france']['20'], 3.56)
+        # Meilleurtaux 01/10/2026, profil « bon » = notre « moyen » national
+        self.assertEqual(TAUX_ACTUELS['regions']['autre']['20'], 3.80)
+        self.assertEqual(TAUX_ACTUELS['regions']['autre']['25'], 3.93)
+        self.assertEqual(TAUX_ACTUELS['regions']['ile_de_france']['20'], 3.72)
         self.assertEqual(TAUX_ACTUELS['assurance']['30_45'], 0.20)
 
     def test_date_du_bareme_et_alerte(self):
         from datetime import date
         from .views import TAUX_DATE, bareme_info
-        self.assertEqual(TAUX_DATE, date(2026, 9, 29))
+        self.assertEqual(TAUX_DATE, date(2026, 10, 1))
         frais = bareme_info(date(2026, 10, 5))
-        self.assertEqual((frais['date'], frais['perime']), ('29/09/2026', False))
-        self.assertTrue(bareme_info(date(2026, 10, 7))['perime'])   # plus d'une semaine
+        self.assertEqual((frais['date'], frais['perime']), ('01/10/2026', False))
+        self.assertTrue(bareme_info(date(2026, 10, 9))['perime'])   # plus d'une semaine
 
     def test_date_affichee_sur_les_pages(self):
         for nom in ('simulateur_pret', 'biens_financables'):
-            self.assertContains(self.client.get(reverse(nom)), '29/09/2026')
+            self.assertContains(self.client.get(reverse(nom)), '01/10/2026')
 
     def test_frais_de_notaire(self):
         s = SimulateurPretImmobilier()
