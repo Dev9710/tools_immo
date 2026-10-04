@@ -165,6 +165,20 @@
   .bf .carte .prix { font-size: 1.35rem; }
   .bf .carte .jauge { margin: .35rem 0 0; width: 100%; }
 
+  /* Vérification sans IA */
+  .bf .verif { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; }
+  .bf .bouton-verif { border-radius: 10px; font-weight: 600; font-size: .85rem; padding: .45rem .9rem;
+    border: 1px solid var(--brand); background: var(--brand); color: #fff; min-height: 40px; }
+  .bf .bouton-verif:hover { background: #4338ca; }
+  .bf .bouton-verif[disabled] { background: var(--soft); color: var(--mute); border-color: var(--hair); }
+  .bf .agences-veille summary { cursor: pointer; font-size: .85rem; color: var(--ink-2); }
+  .bf .agences-veille ul { list-style: none; padding: 0; margin: .5rem 0 0; font-size: .85rem; }
+  .bf .agences-veille li { padding: .35rem 0; border-top: 1px solid var(--hair); }
+  .bf .etat-ok { color: var(--ok); } .bf .etat-ko { color: var(--ko); } .bf .etat-sans { color: var(--mute); }
+  .bf .a-verifier { display: inline-flex; align-items: center; gap: .25rem; font-size: .7rem; font-weight: 600;
+    color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 999px;
+    padding: .05rem .45rem; vertical-align: middle; cursor: help; }
+
   /* Entrée en douceur */
   @keyframes bf-monte { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
   .bf .apparait { animation: bf-monte .45s cubic-bezier(.2, .7, .2, 1) both; }
@@ -199,6 +213,46 @@
       </form>
       {% endif %}
     </div>
+    {% if ville %}
+    <div class="verif mt-3">
+      <form method="post" action="{% url 'lancer_veille' %}" class="m-0">
+        {% csrf_token %}
+        <input type="hidden" name="ville" value="{{ ville.slug }}">
+        {% if veille_en_cours %}
+        <button type="button" class="bouton-verif" disabled><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Vérification en cours…</button>
+        {% else %}
+        <button class="bouton-verif"><i class="bi bi-arrow-repeat" aria-hidden="true"></i> Mettre à jour cette ville</button>
+        {% endif %}
+      </form>
+      <span class="small mute" id="veille-avancement" aria-live="polite"
+            {% if veille_en_cours %}data-etat-url="{% url 'etat_veille' %}?ville={{ ville.slug }}"{% endif %}>
+        {% if veille_en_cours %}Contrôle des agences en cours…
+        {% elif veille_fin %}Vérifié le {{ veille_fin|date:"d/m à H:i" }}, sans IA, fiche par fiche.
+        {% else %}Pas encore vérifié : les biens viennent du dernier passage de Gino.{% endif %}
+      </span>
+    </div>
+    {% if veille_impossible %}
+    <div class="alert alert-warning small mt-2 mb-0">
+      <strong>Impossible de lancer la vérification.</strong>
+      <ul class="mb-0"><li>Le programme d'agence-immo (veille.py ou son Python) est introuvable.</li>
+        <li>Vérifie le réglage <code translate="no">AGENCE_IMMO_PYTHON</code>, puis réessaie.</li></ul>
+    </div>
+    {% endif %}
+    {% if agences_veille %}
+    <details class="agences-veille mt-2">
+      <summary>État des agences au dernier contrôle</summary>
+      <ul>
+        {% for a in agences_veille %}
+        <li>
+          {% if a.etat == 'ok' %}<span class="etat-ok"><i class="bi bi-check-circle-fill" aria-hidden="true"></i> {{ a.nom }}</span> — vérifiée{% if a.resume %} ({{ a.resume }}){% endif %}
+          {% elif a.etat == 'sans_recette' %}<span class="etat-sans"><i class="bi bi-dash-circle" aria-hidden="true"></i> {{ a.nom }}</span> — pas encore de recette : données du dernier passage de Gino
+          {% else %}<span class="etat-ko"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> {{ a.nom }}</span> — Recette à réparer : relance Gino sur {{ a.nom }}{% if a.raison %} ({{ a.raison }}){% endif %}{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+    {% endif %}
   </header>
 
   {% if dossier_introuvable %}
@@ -356,7 +410,7 @@
         <tr class="bien" data-verdict="{{ b.verdict|default:'' }}" data-type="{{ b.type }}" data-surface="{{ b.surface|default:0|unlocalize }}" data-pieces="{{ b.pieces|default:0 }}" data-chambres="{{ b.chambres|default:0 }}" data-prix="{{ b.prix|default:0|unlocalize }}" data-mensualite="{{ b.mensualite|default:0|unlocalize }}" data-endettement="{{ b.endettement|default:0|unlocalize }}" data-ecart="{{ b.ecart_m2|default_if_none:9|unlocalize }}" data-ordre="{{ forloop.counter }}">
           <td class="ps-4">{% include 'analyseur/_verdict.html' %}</td>
           <td>
-            <div class="bien-titre">{{ b.type }}{% if b.pieces %} {{ b.pieces }} p.{% endif %}{% if b.surface %} · <span class="num">{{ b.surface|floatformat:0 }} m²</span>{% endif %}{% if b.chambres %} · {{ b.chambres }} ch.{% endif %}{% if b.neuf %} <span class="neuf">neuf</span>{% endif %}</div>
+            <div class="bien-titre">{{ b.type }}{% if b.pieces %} {{ b.pieces }} p.{% endif %}{% if b.surface %} · <span class="num">{{ b.surface|floatformat:0 }} m²</span>{% endif %}{% if b.chambres %} · {{ b.chambres }} ch.{% endif %}{% if b.neuf %} <span class="neuf">neuf</span>{% endif %}{% if b.a_verifier %} <span class="a-verifier" title="{{ b.a_verifier|join:' ; ' }}"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> à vérifier<span class="visually-hidden"> : {{ b.a_verifier|join:' ; ' }}</span></span>{% endif %}{% if b.jours_sans_verif %} <span class="small mute">non vérifié depuis {{ b.jours_sans_verif }} jours</span>{% endif %}</div>
             <div class="bien-sous">{{ b.lieu }} · {{ b.agences|join:" + " }}{% if b.annee %} · {{ b.annee }}{% endif %}</div>
           </td>
           <td class="text-end num prix">{% if b.prix %}{{ b.prix|floatformat:0|intcomma }}<span class="eur">€</span>{% else %}<span class="mute fw-normal">prix non affiché</span>{% endif %}</td>
@@ -383,7 +437,7 @@
         {% if b.mensualite is not None %}<span class="num small"><b>{{ b.mensualite|floatformat:0|intcomma }} €</b>/mois · {{ b.endettement|floatformat:0 }} %</span>{% endif %}
       </div>
       {% if b.mensualite is not None %}<div class="jauge" style="--p: {{ b.endettement|floatformat:0|unlocalize }}" aria-hidden="true"><span></span></div>{% endif %}
-      <div class="bien-titre mt-2">{{ b.type }}{% if b.pieces %} {{ b.pieces }} p.{% endif %}{% if b.surface %} · {{ b.surface|floatformat:0 }} m²{% endif %}{% if b.chambres %} · {{ b.chambres }} ch.{% endif %}</div>
+      <div class="bien-titre mt-2">{{ b.type }}{% if b.pieces %} {{ b.pieces }} p.{% endif %}{% if b.surface %} · {{ b.surface|floatformat:0 }} m²{% endif %}{% if b.chambres %} · {{ b.chambres }} ch.{% endif %}{% if b.a_verifier %} <span class="a-verifier" title="{{ b.a_verifier|join:' ; ' }}"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> à vérifier<span class="visually-hidden"> : {{ b.a_verifier|join:' ; ' }}</span></span>{% endif %}{% if b.jours_sans_verif %} <span class="small mute">non vérifié depuis {{ b.jours_sans_verif }} jours</span>{% endif %}</div>
       <div class="bien-sous">{{ b.lieu }} · {{ b.agences|join:" + " }}</div>
       <div class="d-flex justify-content-between align-items-center mt-2">
         {% include 'analyseur/_ecart.html' %}
@@ -480,6 +534,24 @@
       if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') { e.preventDefault(); trier(th); }
     });
   });
+})();
+</script>
+<script>
+// Pendant un contrôle : lit l'avancement toutes les 2 s, puis recharge la page à la fin.
+(function () {
+  const zone = document.getElementById('veille-avancement');
+  const url = zone && zone.dataset.etatUrl;
+  if (!url) return;
+  const suivre = () => fetch(url, {headers: {'Accept': 'application/json'}})
+    .then(r => r.json())
+    .then(e => {
+      if (!e.en_cours) { location.reload(); return; }
+      const a = e.avancement || {};
+      zone.textContent = `Agence ${Math.min((a.fait || 0) + 1, a.total || 1)} sur ${a.total || '?'} : ${a.agence || '…'}`;
+      setTimeout(suivre, 2000);
+    })
+    .catch(() => setTimeout(suivre, 4000));
+  setTimeout(suivre, 1000);
 })();
 </script>
 {% endblock %}

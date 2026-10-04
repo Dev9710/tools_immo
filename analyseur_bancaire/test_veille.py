@@ -126,3 +126,26 @@ class LancementTests(SimpleTestCase):
         from .views import _demarrer_veille
         with override_settings(AGENCE_IMMO_PYTHON=TMP / "pas-de-python.exe"):
             self.assertFalse(_demarrer_veille(TMP, "creteil"))
+
+    def test_page_affiche_bouton_et_etat(self):
+        r = self.client.get(reverse("biens_financables"), {"ville": "creteil"})
+        self.assertContains(r, "Mettre à jour cette ville")
+        self.assertContains(r, "Vérifié le 05/10 à 21:12")
+        self.assertContains(r, "Recette à réparer")
+        self.assertContains(r, "relance Gino sur Orpi Crossard")
+        self.assertContains(r, "pas encore de recette")
+        self.assertContains(r, "à vérifier")
+        self.assertContains(r, "4 chambres pour 4 pièces")
+        self.assertContains(r, "non vérifié depuis")
+        self.assertContains(r, "Laforêt Créteil</span> — vérifiée (2 nouveau)")
+
+    def test_page_pendant_un_controle(self):
+        verrouiller()
+        r = self.client.get(reverse("biens_financables"), {"ville": "creteil"})
+        self.assertContains(r, "Vérification en cours")
+        self.assertContains(r, 'data-etat-url="')
+        deverrouiller()
+
+    def test_page_python_introuvable(self):
+        r = self.client.get(reverse("biens_financables"), {"ville": "creteil", "veille": "impossible"})
+        self.assertContains(r, "Impossible de lancer la vérification")
