@@ -98,3 +98,7 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 # Résultats de Gino (projet séparé agence-immo). tools_immo les LIT seulement.
 AGENCE_IMMO_DIR = Path(os.environ.get(
     'AGENCE_IMMO_DIR', BASE_DIR.parent / 'tools' / 'scraping' / 'agence-immo'))
+
+# Python du venv d'agence-immo, pour lancer veille.py (bouton « Mettre à jour cette ville »).
+AGENCE_IMMO_PYTHON = Path(os.environ.get(
+    'AGENCE_IMMO_PYTHON', AGENCE_IMMO_DIR / 'venv' / 'Scripts' / 'python.exe'))

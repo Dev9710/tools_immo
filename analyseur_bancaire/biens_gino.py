@@ -10,13 +10,14 @@ eux, sont déjà filtrés par criteres.json — on ne les lit pas.
 import json
 import re
 import statistics
+import time
 import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 HORS_HABITATION = ("terrain", "parking", "garage", "local", "commerce", "immeuble", "fonds")
-STATUTS_MASQUES = ("vendu", "compromis", "erreur")   # « Fiche annonce en erreur » = annonce morte
+STATUTS_MASQUES = ("vendu", "compromis", "erreur", "retire")   # « retire » : fiche supprimée (moteur de vérification)
 PETITS_MOTS = ("sur", "sous", "les", "le", "la", "de", "du", "des", "en")
 
 
@@ -133,6 +134,8 @@ def charger_ville(dossier):
                 "surface": nombre(b.get("surface")), "prix": nombre(b.get("prix")),
                 "url": url, "agence": agence,
                 "statut": str(b.get("statut") or ""),
+                "a_verifier": [str(x) for x in b.get("a_verifier") or [] if x],
+                "verifie_le": str(b.get("verifie_le") or ""),
             })
     return {"biens": biens, "ignores": ignores, "masques": masques,
             "date_releve": datetime.fromtimestamp(max(dates)).date() if dates else None}
@@ -255,3 +258,48 @@ def analyser_ville(dossier, profil, sim):
     resume.update(total=len(ev), prix_max=prix_max_financable(profil, sim))
     return {"biens": ev, "resume": resume, "ignores": lu["ignores"], "masques": lu["masques"],
             "date_releve": lu["date_releve"], "mediane": mediane}
+
+
+# --- Vérification sans IA (veille.py d'agence-immo) : lecture seule de ses fichiers ---
+
+ORDRE_ETAT_VEILLE = {"recette_cassee": 0, "injoignable": 1, "recette_non_validee": 2,
+                     "sans_recette": 3, "ok": 4}
+LIBELLES_EVENEMENTS = {"nouveau": "nouveau", "vendu": "vendu", "compromis": "sous compromis",
+                       "retire": "retiré", "remis_en_vente": "remis en vente",
+                       "baisse_prix": "baisse de prix", "hausse_prix": "hausse de prix",
+                       "a_verifier": "à vérifier"}
+
+
+def etat_veille(dossier):
+    """État du dernier contrôle (`_veille_etat.json`), ou None s'il n'y en a pas."""
+    try:
+        data = json.loads((Path(dossier) / "_veille_etat.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def veille_en_cours(dossier, maintenant=None):
+    """Vrai si un contrôle tient le verrou depuis moins de 2 h (au-delà : abandonné)."""
+    try:
+        debut = float(json.loads((Path(dossier) / "_veille.lock").read_text(encoding="utf-8")).get("debut", 0))
+    except (OSError, ValueError, AttributeError, TypeError):
+        return False
+    return (maintenant or time.time()) - debut < 2 * 3600
+
+
+def agences_veille(dossier):
+    """État de chaque agence au dernier contrôle, les problèmes d'abord."""
+    etat = etat_veille(dossier) or {}
+    noms = _noms_stan(Path(dossier))
+    lignes = []
+    for slug, a in (etat.get("agences") or {}).items():
+        if not isinstance(a, dict):
+            continue
+        evenements = a.get("evenements") if isinstance(a.get("evenements"), dict) else {}
+        lignes.append({"nom": _nom_agence(Path(f"_gino_{slug}.json"), noms),
+                       "etat": str(a.get("etat") or ""), "raison": str(a.get("raison") or ""),
+                       "verifie_le": str(a.get("verifie_le") or ""), "evenements": evenements,
+                       "resume": ", ".join(f"{n} {LIBELLES_EVENEMENTS.get(k, k)}" for k, n in evenements.items())})
+    lignes.sort(key=lambda x: (ORDRE_ETAT_VEILLE.get(x["etat"], 9), x["nom"]))
+    return lignes

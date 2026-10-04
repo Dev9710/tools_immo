@@ -14,4 +14,6 @@ urlpatterns = [
     path('export-dossier-pdf/', views.export_dossier_pdf,
          name='export_dossier_pdf'),
     path('biens-financables/', views.biens_financables, name='biens_financables'),
+    path('biens-financables/verifier/', views.lancer_veille, name='lancer_veille'),
+    path('biens-financables/etat-veille/', views.etat_veille_json, name='etat_veille'),
 ]

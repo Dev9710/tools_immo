@@ -17,6 +17,7 @@ import re
 import unicodedata
 import dataclasses
 import json
+import subprocess
 
 from . import biens_gino
 
@@ -2545,12 +2546,68 @@ def biens_financables(request):
         contexte['ville'] = next(v for v in liste if v['slug'] == slug)
         analyse = biens_gino.analyser_ville(racine / slug, profil, SimulateurPretImmobilier())
         # Affichage seulement (infobulle de l'écart au prix du m²) : aucun calcul de verdict ici.
+        aujourd_hui = date.today()
         for b in analyse['biens']:
             b['prix_m2_affiche'] = (round(b['prix'] / b['surface'])
                                     if b.get('prix') and b.get('surface') else None)
+            try:
+                jours = (aujourd_hui - datetime.fromisoformat(b['verifie_le']).date()).days \
+                    if b.get('verifie_le') else None
+            except ValueError:
+                jours = None
+            b['jours_sans_verif'] = jours if jours is not None and jours > 7 else None
         contexte['analyse'] = analyse
         contexte['mediane_affichee'] = round(analyse['mediane']) if analyse.get('mediane') else None
     # Mensualité que la règle des 35 % laisse disponible (charges déduites), pour l'en-tête.
     contexte['mensualite_max'] = (max(0.0, profil.revenus * biens_gino.SEUIL_FINANCABLE / 100 - profil.charges)
                                   if profil.revenus > 0 else None)
+    if slug in slugs:
+        dossier = racine / slug
+        contexte['veille'] = biens_gino.etat_veille(dossier)
+        contexte['veille_en_cours'] = biens_gino.veille_en_cours(dossier)
+        contexte['agences_veille'] = biens_gino.agences_veille(dossier)
+        fin = (contexte['veille'] or {}).get('fin')
+        try:
+            contexte['veille_fin'] = datetime.fromisoformat(fin) if fin else None
+        except (TypeError, ValueError):
+            contexte['veille_fin'] = None
+    contexte['veille_impossible'] = request.GET.get('veille') == 'impossible'
     return render(request, 'analyseur/biens_financables.html', contexte)
+
+
+def _demarrer_veille(racine, slug):
+    """Lance veille.py d'agence-immo en tâche de fond, détaché de tools_immo.
+    tools_immo ne fait que lancer la commande : aucun code d'agence-immo n'est importé."""
+    python = Path(settings.AGENCE_IMMO_PYTHON)
+    if not python.is_file() or not (racine / 'veille.py').is_file():
+        return False
+    drapeaux = (getattr(subprocess, 'DETACHED_PROCESS', 0)
+                | getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0))
+    with open(racine / slug / '_veille.log', 'w', encoding='utf-8') as journal:
+        subprocess.Popen([str(python), 'veille.py', '--ville', slug], cwd=str(racine),
+                         stdout=journal, stderr=subprocess.STDOUT, creationflags=drapeaux)
+    return True
+
+
+def lancer_veille(request):
+    """Bouton « Mettre à jour cette ville » : un seul contrôle à la fois par ville."""
+    racine = Path(settings.AGENCE_IMMO_DIR)
+    slug = request.POST.get('ville', '') if request.method == 'POST' else ''
+    slugs = {v['slug'] for v in biens_gino.villes(racine) or []}
+    params = {'ville': slug} if slug in slugs else {}
+    if slug in slugs and not biens_gino.veille_en_cours(racine / slug):
+        if not _demarrer_veille(racine, slug):
+            params['veille'] = 'impossible'
+    query = urlencode(params)
+    return redirect(f"{reverse('biens_financables')}{'?' + query if query else ''}")
+
+
+def etat_veille_json(request):
+    """Avancement du contrôle en cours, lu toutes les 2 s par la page."""
+    racine = Path(settings.AGENCE_IMMO_DIR)
+    slug = request.GET.get('ville')
+    if slug not in {v['slug'] for v in biens_gino.villes(racine) or []}:
+        return JsonResponse({}, status=404)
+    etat = biens_gino.etat_veille(racine / slug) or {}
+    etat['en_cours'] = biens_gino.veille_en_cours(racine / slug)
+    return JsonResponse(etat)
