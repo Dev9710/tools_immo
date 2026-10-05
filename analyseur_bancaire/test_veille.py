@@ -149,3 +149,42 @@ class LancementTests(SimpleTestCase):
     def test_page_python_introuvable(self):
         r = self.client.get(reverse("biens_financables"), {"ville": "creteil", "veille": "impossible"})
         self.assertContains(r, "Impossible de lancer la vérification")
+
+
+class DemarrageTests(SimpleTestCase):
+    def setUp(self):
+        from . import views
+        self.views = views
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.racine = Path(tmp.name)
+        (self.racine / 'veille.py').write_text('', encoding='utf-8')
+        (self.racine / 'ville').mkdir()
+        self.python = self.racine / 'python.exe'
+        self.python.write_text('', encoding='utf-8')
+
+    def _lancer(self, popen, **kw):
+        with override_settings(AGENCE_IMMO_PYTHON=str(self.python)), \
+                mock.patch('analyseur_bancaire.views.subprocess.Popen', popen):
+            return self.views._demarrer_veille(self.racine, 'ville')
+
+    def test_attend_le_verrou(self):
+        popen = mock.MagicMock()
+        with mock.patch('analyseur_bancaire.views.biens_gino.veille_en_cours',
+                        side_effect=[False, False, True]), \
+                mock.patch.object(self.views, '_pause_lancement') as pause:
+            self.assertTrue(self._lancer(popen))
+        popen.assert_called_once()
+        self.assertEqual(pause.call_count, 2)
+
+    def test_verrou_jamais_vu_rend_la_main(self):
+        popen = mock.MagicMock()
+        with mock.patch('analyseur_bancaire.views.biens_gino.veille_en_cours',
+                        return_value=False), \
+                mock.patch.object(self.views, '_pause_lancement') as pause:
+            self.assertTrue(self._lancer(popen))
+        self.assertEqual(pause.call_count, 50)
+
+    def test_popen_echoue(self):
+        popen = mock.MagicMock(side_effect=OSError('boom'))
+        self.assertFalse(self._lancer(popen))

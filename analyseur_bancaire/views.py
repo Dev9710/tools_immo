@@ -18,6 +18,7 @@ import unicodedata
 import dataclasses
 import json
 import subprocess
+import time
 
 from . import biens_gino
 
@@ -2575,6 +2576,9 @@ def biens_financables(request):
     return render(request, 'analyseur/biens_financables.html', contexte)
 
 
+_pause_lancement = time.sleep
+
+
 def _demarrer_veille(racine, slug):
     """Lance veille.py d'agence-immo en tâche de fond, détaché de tools_immo.
     tools_immo ne fait que lancer la commande : aucun code d'agence-immo n'est importé."""
@@ -2583,9 +2587,18 @@ def _demarrer_veille(racine, slug):
         return False
     drapeaux = (getattr(subprocess, 'DETACHED_PROCESS', 0)
                 | getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0))
-    with open(racine / slug / '_veille.log', 'w', encoding='utf-8') as journal:
-        subprocess.Popen([str(python), 'veille.py', '--ville', slug], cwd=str(racine),
-                         stdout=journal, stderr=subprocess.STDOUT, creationflags=drapeaux)
+    try:
+        with open(racine / slug / '_veille.log', 'w', encoding='utf-8') as journal:
+            subprocess.Popen([str(python), 'veille.py', '--ville', slug], cwd=str(racine),
+                             stdout=journal, stderr=subprocess.STDOUT, creationflags=drapeaux)
+    except OSError:
+        return False
+    # Python met ~1 s à démarrer : on attend le verrou (max 5 s) pour que la page
+    # réaffichée après la redirection voie déjà « Vérification en cours ».
+    for _ in range(50):
+        if biens_gino.veille_en_cours(racine / slug):
+            break
+        _pause_lancement(0.1)
     return True
 
 
