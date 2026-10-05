@@ -118,9 +118,14 @@ def charger_ville(dossier):
             # cliquable : le bien est écarté, comme s'il n'avait pas d'url du tout.
             if not url or not url.lower().startswith(("http://", "https://")):
                 continue
+            a_verifier = [str(x) for x in b.get("a_verifier") or [] if x]
             t = type_habitation(b.get("type"))
             if t is None:
-                continue
+                # Type vide ou inconnu : gardé seulement si le moteur de vérification l'a signalé
+                # (« type illisible ») et que rien n'indique un bien hors habitation.
+                if not a_verifier or any(m in _sans_accents(b.get("type")) for m in HORS_HABITATION):
+                    continue
+                t = "Bien"
             if est_masque(b.get("statut")):
                 masques += 1
                 continue
@@ -134,7 +139,7 @@ def charger_ville(dossier):
                 "surface": nombre(b.get("surface")), "prix": nombre(b.get("prix")),
                 "url": url, "agence": agence,
                 "statut": str(b.get("statut") or ""),
-                "a_verifier": [str(x) for x in b.get("a_verifier") or [] if x],
+                "a_verifier": a_verifier,
                 "verifie_le": str(b.get("verifie_le") or ""),
             })
     return {"biens": biens, "ignores": ignores, "masques": masques,
@@ -300,6 +305,7 @@ def agences_veille(dossier):
         lignes.append({"nom": _nom_agence(Path(f"_gino_{slug}.json"), noms),
                        "etat": str(a.get("etat") or ""), "raison": str(a.get("raison") or ""),
                        "verifie_le": str(a.get("verifie_le") or ""), "evenements": evenements,
+                       "avertissement": str(a.get("avertissement") or ""),
                        "resume": ", ".join(f"{n} {LIBELLES_EVENEMENTS.get(k, k)}" for k, n in evenements.items())})
     lignes.sort(key=lambda x: (ORDRE_ETAT_VEILLE.get(x["etat"], 9), x["nom"]))
     return lignes

@@ -109,6 +109,25 @@ class ChargerVilleTests(SimpleTestCase):
         self.assertEqual(bg.villes(self.tmp),
                          [{"slug": "champigny-sur-marne", "nom": "Champigny-sur-Marne"}])
 
+    def test_type_vide_ou_inconnu_garde_s_il_est_a_verifier(self):
+        """Le moteur de vérification signale « type illisible » : le bien reste visible, type « Bien »."""
+        d = ville(self.tmp / "sans-type", {
+            "_gino_test.json": [
+                {"type": "", "prix": "200 000", "url": "https://ex/vide", "a_verifier": ["type illisible"]},
+                {"type": "Bien immobilier", "prix": "210 000", "url": "https://ex/inconnu",
+                 "a_verifier": ["type illisible"]},
+                {"type": "", "prix": "220 000", "url": "https://ex/vide-sans-signal"},
+                {"type": "Terrain", "prix": "90 000", "url": "https://ex/terrain", "a_verifier": ["type illisible"]},
+                {"type": "", "prix": "230 000", "url": "https://ex/vendu", "statut": "vendu",
+                 "a_verifier": ["type illisible"]},
+            ]
+        })
+        r = bg.charger_ville(d)
+        self.assertEqual([b["url"] for b in r["biens"]], ["https://ex/vide", "https://ex/inconnu"])
+        self.assertEqual([b["type"] for b in r["biens"]], ["Bien", "Bien"])
+        self.assertEqual(r["biens"][1]["type_source"], "Bien immobilier")
+        self.assertEqual(r["masques"], 1)
+
     def test_robustesse_type_non_string(self):
         """Type non-string (ex: entier) ne doit pas planter ; le bien est ignoré."""
         d = ville(self.tmp / "robustesse", {
