@@ -2589,7 +2589,8 @@ def _demarrer_veille(racine, slug):
                 | getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0))
     try:
         with open(racine / slug / '_veille.log', 'w', encoding='utf-8') as journal:
-            subprocess.Popen([str(python), 'veille.py', '--ville', slug], cwd=str(racine),
+            # « -u » : sortie non bufferisée, le journal se remplit au fil du contrôle.
+            subprocess.Popen([str(python), '-u', 'veille.py', '--ville', slug], cwd=str(racine),
                              stdout=journal, stderr=subprocess.STDOUT, creationflags=drapeaux)
     except OSError:
         return False

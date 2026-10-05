@@ -246,7 +246,9 @@
         <li>
           {% if a.etat == 'ok' %}<span class="etat-ok"><i class="bi bi-check-circle-fill" aria-hidden="true"></i> {{ a.nom }}</span> — vérifiée{% if a.resume %} ({{ a.resume }}){% endif %}
           {% elif a.etat == 'sans_recette' %}<span class="etat-sans"><i class="bi bi-dash-circle" aria-hidden="true"></i> {{ a.nom }}</span> — pas encore de recette : données du dernier passage de Gino
+          {% elif a.etat == 'injoignable' %}<span class="etat-sans"><i class="bi bi-wifi-off" aria-hidden="true"></i> {{ a.nom }}</span> — site injoignable au dernier contrôle (données conservées)
           {% else %}<span class="etat-ko"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> {{ a.nom }}</span> — Recette à réparer : relance Gino sur {{ a.nom }}{% if a.raison %} ({{ a.raison }}){% endif %}{% endif %}
+          {% if a.avertissement %}<br><small class="mute">{{ a.avertissement }}</small>{% endif %}
         </li>
         {% endfor %}
       </ul>

@@ -31,8 +31,15 @@ ETAT = {"en_cours": False, "debut": "2026-10-05T21:00", "fin": "2026-10-05T21:12
                     "nina": {"etat": "sans_recette"}}}
 
 
-def ecrire_etat():
-    (VILLE / "_veille_etat.json").write_text(json.dumps(ETAT), encoding="utf-8")
+ETAT_AVEC_SOUCIS = {**ETAT, "agences": {
+    "laforet-creteil": {"etat": "ok", "verifie_le": "2026-10-05T21:12", "evenements": {},
+                        "avertissement": "Excel non mis à jour : classeur ouvert"},
+    "foncia-creteil": {"etat": "injoignable", "raison": "liste des biens illisible"},
+    "nina": {"etat": "sans_recette"}}}
+
+
+def ecrire_etat(etat=ETAT):
+    (VILLE / "_veille_etat.json").write_text(json.dumps(etat), encoding="utf-8")
 
 
 def verrouiller(debut=None):
@@ -72,6 +79,13 @@ class LectureEtatTests(SimpleTestCase):
         self.assertEqual(a[2]["nom"], "Laforêt Créteil")
         self.assertEqual(a[2]["resume"], "2 nouveau")
         self.assertEqual(a[0]["raison"], "0 bien lu, 24 au contrôle précédent")
+        self.assertEqual(a[2]["avertissement"], "")
+
+    def test_agences_veille_remonte_l_avertissement(self):
+        ecrire_etat(ETAT_AVEC_SOUCIS)
+        a = {x["etat"]: x for x in biens_gino.agences_veille(VILLE)}
+        self.assertEqual(a["ok"]["avertissement"], "Excel non mis à jour : classeur ouvert")
+        self.assertEqual(a["injoignable"]["avertissement"], "")
 
 
 @override_settings(AGENCE_IMMO_DIR=TMP)
@@ -139,6 +153,13 @@ class LancementTests(SimpleTestCase):
         self.assertContains(r, "non vérifié depuis")
         self.assertContains(r, "Laforêt Créteil</span> — vérifiée (2 nouveau)")
 
+    def test_page_site_injoignable_et_avertissement(self):
+        ecrire_etat(ETAT_AVEC_SOUCIS)
+        r = self.client.get(reverse("biens_financables"), {"ville": "creteil"})
+        self.assertContains(r, "site injoignable au dernier contrôle (données conservées)")
+        self.assertNotContains(r, "Recette à réparer")
+        self.assertContains(r, "Excel non mis à jour : classeur ouvert")
+
     def test_page_pendant_un_controle(self):
         verrouiller()
         r = self.client.get(reverse("biens_financables"), {"ville": "creteil"})
@@ -175,6 +196,8 @@ class DemarrageTests(SimpleTestCase):
                 mock.patch.object(self.views, '_pause_lancement') as pause:
             self.assertTrue(self._lancer(popen))
         popen.assert_called_once()
+        # « -u » : journal _veille.log écrit au fil de l'eau, pas à la fin du contrôle.
+        self.assertEqual(popen.call_args[0][0], [str(self.python), '-u', 'veille.py', '--ville', 'ville'])
         self.assertEqual(pause.call_count, 2)
 
     def test_verrou_jamais_vu_rend_la_main(self):
