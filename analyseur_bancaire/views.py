@@ -2557,6 +2557,15 @@ def biens_financables(request):
             except ValueError:
                 jours = None
             b['jours_sans_verif'] = jours if jours is not None and jours > 7 else None
+            b['pastilles'] = (['neuf' if b.get('neuf') else 'ancien']
+                              + (['nouveau'] if b.get('nouveau') else [])
+                              + (['baisse'] if b.get('baisse') else []))
+            if b.get('baisse'):
+                ba, euros = b['baisse'], lambda v: f"{round(v):,}".replace(',', ' ')
+                jour = ba['depuis'][8:10] + '/' + ba['depuis'][5:7] if len(ba['depuis']) >= 10 else ''
+                pct = f"{abs(ba['pct']):g}".replace('.', ',')
+                b['baisse_texte'] = (f"{euros(ba['avant'])} → {euros(ba['apres'])} € (−{pct} %)"
+                                     + (f" depuis le {jour}" if jour else ''))
         contexte['analyse'] = analyse
         contexte['mediane_affichee'] = round(analyse['mediane']) if analyse.get('mediane') else None
     # Mensualité que la règle des 35 % laisse disponible (charges déduites), pour l'en-tête.

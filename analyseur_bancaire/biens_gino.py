@@ -13,7 +13,7 @@ import statistics
 import time
 import unicodedata
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 HORS_HABITATION = ("terrain", "parking", "garage", "local", "commerce", "immeuble", "fonds")
@@ -95,9 +95,41 @@ def _nom_agence(fichier, noms):
     return " ".join(m.capitalize() for m in slug.split("-"))
 
 
-def charger_ville(dossier):
-    """Biens d'habitation d'une ville, fichier par fichier ; un fichier illisible est ignoré."""
+JOURS_NOUVEAU = 7
+
+
+def _date(v):
+    try:
+        return date.fromisoformat(str(v)[:10])
+    except ValueError:
+        return None
+
+
+def baisse_prix(bien):
+    """Baisse du prix actuel par rapport au plus haut prix vu par la veille, ou None."""
+    hist = bien.get("historique_prix")
+    points = [(str(h.get("date") or ""), nombre(h.get("prix"))) for h in hist
+              if isinstance(h, dict)] if isinstance(hist, list) else []
+    points = [(d, p) for d, p in points if p]
+    actuel = nombre(bien.get("prix"))
+    if not points or not actuel:
+        return None
+    haut = max(p for _, p in points)
+    if actuel >= haut:
+        return None
+    # Date de la baisse : début de la dernière série de relevés au prix actuel.
+    depuis = ""
+    for d, p in points:
+        depuis = (depuis or d) if p == actuel else ""
+    return {"avant": haut, "apres": actuel, "pct": round((actuel / haut - 1) * 100, 1),
+            "depuis": depuis}
+
+
+def charger_ville(dossier, aujourdhui=None):
+    """Biens d'habitation d'une ville, fichier par fichier ; un fichier illisible est ignoré.
+    « nouveau » : apparu après le premier relevé de son agence, il y a JOURS_NOUVEAU jours au plus."""
     dossier = Path(dossier)
+    aujourdhui = aujourdhui or date.today()
     noms = _noms_stan(dossier)
     biens, ignores, masques, dates = [], [], 0, []
     for f in sorted(dossier.glob("_gino_*.json")):
@@ -110,6 +142,8 @@ def charger_ville(dossier):
             continue
         dates.append(f.stat().st_mtime)
         agence = _nom_agence(f, noms)
+        vus = [d for d in (_date(b.get("vu_depuis")) for b in data if isinstance(b, dict)) if d]
+        premier_releve = min(vus) if vus else None
         for b in data:
             if not isinstance(b, dict):
                 continue
@@ -130,6 +164,7 @@ def charger_ville(dossier):
                 masques += 1
                 continue
             dpe = str(b.get("dpe") or "").strip().upper()
+            vu = _date(b.get("vu_depuis"))
             biens.append({
                 "type": t, "type_source": str(b.get("type") or ""),
                 "lieu": str(b.get("lieu") or "").strip(),
@@ -141,6 +176,9 @@ def charger_ville(dossier):
                 "statut": str(b.get("statut") or ""),
                 "a_verifier": a_verifier,
                 "verifie_le": str(b.get("verifie_le") or ""),
+                "nouveau": bool(vu and premier_releve and vu > premier_releve
+                                and (aujourdhui - vu).days <= JOURS_NOUVEAU),
+                "baisse": baisse_prix(b),
             })
     return {"biens": biens, "ignores": ignores, "masques": masques,
             "date_releve": datetime.fromtimestamp(max(dates)).date() if dates else None}
