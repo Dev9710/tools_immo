@@ -82,3 +82,32 @@ class PastillesTests(SimpleTestCase):
         self.assertIn('class="pastille-bien p-baisse"', html)
         self.assertIn("250 000 → 240 000 € (−4 %) depuis le 05/10", html)
         self.assertIn('data-pastilles="neuf"', html)
+
+
+class JamaisReverifieTests(SimpleTestCase):
+    """Biens d'une agence sans recette : relevés une fois par Gino, jamais revérifiés depuis
+    (ex. maison KSI vendue mais toujours affichée). Signalés et masquables."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        import os, time
+        cls.ville = TMP / "lhay"
+        cls.ville.mkdir(exist_ok=True)
+        f = cls.ville / "_gino_ksi.json"
+        f.write_text(json.dumps([bien(20), bien(21, verifie_le="2026-10-05T10:00")]), encoding="utf-8")
+        releve = time.mktime((2026, 9, 28, 12, 0, 0, 0, 0, -1))
+        os.utime(f, (releve, releve))
+
+    def test_jamais_revérifie_et_date_du_releve(self):
+        b = par_url(biens_gino.charger_ville(self.ville, aujourdhui=AUJOURDHUI))
+        self.assertTrue(b["https://ex/20"]["jamais_verifie"])
+        self.assertEqual(b["https://ex/20"]["releve_le"], "2026-09-28")
+        self.assertFalse(b["https://ex/21"]["jamais_verifie"])
+
+    def test_etiquette_et_filtre_dans_la_page(self):
+        with self.settings(AGENCE_IMMO_DIR=TMP):
+            html = self.client.get(reverse("biens_financables"), {"ville": "lhay"}).content.decode()
+        self.assertIn("jamais revérifié · relevé le 28/09", html)
+        self.assertIn('value="verifies"', html)
+        self.assertEqual(html.count('data-jamais="1"'), 2)      # ligne du tableau + carte mobile

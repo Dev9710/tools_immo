@@ -155,6 +155,9 @@ def charger_ville(dossier, aujourdhui=None):
             ignores.append(f.name)
             continue
         dates.append(f.stat().st_mtime)
+        # Fichier d'une agence sans recette : écrit par Gino et jamais touché depuis, sa date
+        # est celle du relevé. Sert à dater les biens jamais revérifiés.
+        releve_le = datetime.fromtimestamp(f.stat().st_mtime).date().isoformat()
         agence = _nom_agence(f, noms)
         vus = [d for d in (_date(b.get("vu_depuis")) for b in data if isinstance(b, dict)) if d]
         premier_releve = min(vus) if vus else None
@@ -190,6 +193,8 @@ def charger_ville(dossier, aujourdhui=None):
                 "statut": str(b.get("statut") or ""),
                 "a_verifier": a_verifier,
                 "verifie_le": str(b.get("verifie_le") or ""),
+                "jamais_verifie": not b.get("verifie_le"),
+                "releve_le": releve_le,
                 "nouveau": bool(vu and premier_releve and vu > premier_releve
                                 and (aujourdhui - vu).days <= JOURS_NOUVEAU),
                 "baisse": baisse_prix(b),

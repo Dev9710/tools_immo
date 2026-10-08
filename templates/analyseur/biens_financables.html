@@ -146,6 +146,9 @@
   .bf .pastille-bien { display: inline-flex; align-items: center; font-size: .68rem; font-weight: 600; border-radius: 999px; padding: .1rem .45rem; vertical-align: middle; }
   .bf .p-neuf { color: #0369a1; background: #e0f2fe; }
   .bf .p-ancien { color: #475569; background: #f1f5f9; }
+  .bf .jamais-verifie { display: inline-flex; align-items: center; gap: .25rem; font-size: .68rem; font-weight: 600;
+    color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 999px;
+    padding: .05rem .45rem; vertical-align: middle; white-space: nowrap; }
   .bf .p-nouveau { color: #4338ca; background: #e0e7ff; }
   .bf .p-baisse { color: #047857; background: #d1fae5; cursor: help; }
 
@@ -391,7 +394,7 @@
       <div><label class="form-label d-block" for="f-pieces">Pièces min</label><input id="f-pieces" type="number" inputmode="numeric" autocomplete="off" class="form-control form-control-sm"></div>
       <div><label class="form-label d-block" for="f-chambres">Chambres min</label><input id="f-chambres" type="number" inputmode="numeric" autocomplete="off" class="form-control form-control-sm"></div>
       <div><label class="form-label d-block" for="f-pastille">Pastille</label>
-        <select id="f-pastille" class="form-select form-select-sm"><option value="">Toutes</option><option value="nouveau">Nouveaux</option><option value="baisse">Baisse de prix</option><option value="neuf">Neufs</option><option value="ancien">Anciens</option></select></div>
+        <select id="f-pastille" class="form-select form-select-sm"><option value="">Toutes</option><option value="nouveau">Nouveaux</option><option value="baisse">Baisse de prix</option><option value="neuf">Neufs</option><option value="ancien">Anciens</option><option value="verifies">Revérifiés seulement</option></select></div>
       <button type="reset" class="btn btn-link btn-sm px-0 text-decoration-none" id="f-reset"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Réinitialiser les filtres</button>
       <span class="ms-auto compte" aria-live="polite"><b class="num" id="compte">{{ analyse.biens|length }}</b> bien{{ analyse.biens|length|pluralize }} affiché{{ analyse.biens|length|pluralize }}</span>
     </form>
@@ -413,10 +416,10 @@
         </tr></thead>
         <tbody>
         {% for b in analyse.biens %}
-        <tr class="bien" data-pastilles="{{ b.pastilles|join:' ' }}" data-verdict="{{ b.verdict|default:'' }}" data-type="{{ b.type }}" data-surface="{{ b.surface|default:0|unlocalize }}" data-pieces="{{ b.pieces|default:0 }}" data-chambres="{{ b.chambres|default:0 }}" data-prix="{{ b.prix|default:0|unlocalize }}" data-mensualite="{{ b.mensualite|default:0|unlocalize }}" data-endettement="{{ b.endettement|default:0|unlocalize }}" data-ecart="{{ b.ecart_m2|default_if_none:9|unlocalize }}" data-ordre="{{ forloop.counter }}">
+        <tr class="bien" data-jamais="{% if b.jamais_verifie %}1{% else %}0{% endif %}" data-pastilles="{{ b.pastilles|join:' ' }}" data-verdict="{{ b.verdict|default:'' }}" data-type="{{ b.type }}" data-surface="{{ b.surface|default:0|unlocalize }}" data-pieces="{{ b.pieces|default:0 }}" data-chambres="{{ b.chambres|default:0 }}" data-prix="{{ b.prix|default:0|unlocalize }}" data-mensualite="{{ b.mensualite|default:0|unlocalize }}" data-endettement="{{ b.endettement|default:0|unlocalize }}" data-ecart="{{ b.ecart_m2|default_if_none:9|unlocalize }}" data-ordre="{{ forloop.counter }}">
           <td class="ps-4">{% include 'analyseur/_verdict.html' %}</td>
           <td>
-            <div class="bien-titre">{{ b.type }}{% if b.pieces %} {{ b.pieces }} p.{% endif %}{% if b.surface %} · <span class="num">{{ b.surface|floatformat:0 }} m²</span>{% endif %}{% if b.chambres %} · {{ b.chambres }} ch.{% endif %}{% for p in b.pastilles %} <span class="pastille-bien p-{{ p }}"{% if p == 'baisse' %} title="{{ b.baisse_texte }}"{% endif %}>{% if p == 'baisse' %}<i class="bi bi-arrow-down-short" aria-hidden="true"></i>baisse de prix<span class="visually-hidden"> : {{ b.baisse_texte }}</span>{% else %}{{ p }}{% endif %}</span>{% endfor %}{% if b.a_verifier %} <span class="a-verifier" title="{{ b.a_verifier|join:' ; ' }}"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> à vérifier<span class="visually-hidden"> : {{ b.a_verifier|join:' ; ' }}</span></span>{% endif %}{% if b.jours_sans_verif %} <span class="small mute">non vérifié depuis {{ b.jours_sans_verif }} jours</span>{% endif %}</div>
+            <div class="bien-titre">{{ b.type }}{% if b.pieces %} {{ b.pieces }} p.{% endif %}{% if b.surface %} · <span class="num">{{ b.surface|floatformat:0 }} m²</span>{% endif %}{% if b.chambres %} · {{ b.chambres }} ch.{% endif %}{% for p in b.pastilles %} <span class="pastille-bien p-{{ p }}"{% if p == 'baisse' %} title="{{ b.baisse_texte }}"{% endif %}>{% if p == 'baisse' %}<i class="bi bi-arrow-down-short" aria-hidden="true"></i>baisse de prix<span class="visually-hidden"> : {{ b.baisse_texte }}</span>{% else %}{{ p }}{% endif %}</span>{% endfor %}{% if b.a_verifier %} <span class="a-verifier" title="{{ b.a_verifier|join:' ; ' }}"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> à vérifier<span class="visually-hidden"> : {{ b.a_verifier|join:' ; ' }}</span></span>{% endif %}{% if b.jours_sans_verif %} <span class="small mute">non vérifié depuis {{ b.jours_sans_verif }} jours</span>{% endif %}{% if b.jamais_verifie %} <span class="jamais-verifie" title="Agence sans vérification automatique : ce bien n'a pas été recontrôlé depuis son relevé. Vérifiez qu'il est toujours en vente."><i class="bi bi-clock-history" aria-hidden="true"></i> jamais revérifié · relevé le {{ b.releve_le|slice:"8:10" }}/{{ b.releve_le|slice:"5:7" }}</span>{% endif %}</div>
             <div class="bien-sous">{{ b.lieu }} · {{ b.agences|join:" + " }}{% if b.annee %} · {{ b.annee }}{% endif %}</div>
           </td>
           <td class="text-end num prix">{% if b.prix %}{{ b.prix|floatformat:0|intcomma }}<span class="eur">€</span>{% else %}<span class="mute fw-normal">prix non affiché</span>{% endif %}</td>
@@ -436,14 +439,14 @@
   {# ---------- 5. Cartes (mobile) ---------- #}
   <div class="d-md-none mt-3">
     {% for b in analyse.biens %}
-    <article class="carte mb-2 bien" data-pastilles="{{ b.pastilles|join:' ' }}" data-verdict="{{ b.verdict|default:'' }}" data-type="{{ b.type }}" data-surface="{{ b.surface|default:0|unlocalize }}" data-pieces="{{ b.pieces|default:0 }}" data-chambres="{{ b.chambres|default:0 }}">
+    <article class="carte mb-2 bien" data-jamais="{% if b.jamais_verifie %}1{% else %}0{% endif %}" data-pastilles="{{ b.pastilles|join:' ' }}" data-verdict="{{ b.verdict|default:'' }}" data-type="{{ b.type }}" data-surface="{{ b.surface|default:0|unlocalize }}" data-pieces="{{ b.pieces|default:0 }}" data-chambres="{{ b.chambres|default:0 }}">
       <div class="d-flex justify-content-between align-items-center">{% include 'analyseur/_verdict.html' %}{% include 'analyseur/_dpe.html' %}</div>
       <div class="d-flex justify-content-between align-items-baseline mt-2">
         <span class="num prix">{% if b.prix %}{{ b.prix|floatformat:0|intcomma }}<span class="eur">€</span>{% else %}<span class="mute fs-6 fw-normal">prix non affiché</span>{% endif %}</span>
         {% if b.mensualite is not None %}<span class="num small"><b>{{ b.mensualite|floatformat:0|intcomma }} €</b>/mois · {{ b.endettement|floatformat:0 }} %</span>{% endif %}
       </div>
       {% if b.mensualite is not None %}<div class="jauge" style="--p: {{ b.endettement|floatformat:0|unlocalize }}" aria-hidden="true"><span></span></div>{% endif %}
-      <div class="bien-titre mt-2">{{ b.type }}{% if b.pieces %} {{ b.pieces }} p.{% endif %}{% if b.surface %} · {{ b.surface|floatformat:0 }} m²{% endif %}{% if b.chambres %} · {{ b.chambres }} ch.{% endif %}{% for p in b.pastilles %} <span class="pastille-bien p-{{ p }}"{% if p == 'baisse' %} title="{{ b.baisse_texte }}"{% endif %}>{% if p == 'baisse' %}<i class="bi bi-arrow-down-short" aria-hidden="true"></i>baisse de prix<span class="visually-hidden"> : {{ b.baisse_texte }}</span>{% else %}{{ p }}{% endif %}</span>{% endfor %}{% if b.a_verifier %} <span class="a-verifier" title="{{ b.a_verifier|join:' ; ' }}"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> à vérifier<span class="visually-hidden"> : {{ b.a_verifier|join:' ; ' }}</span></span>{% endif %}{% if b.jours_sans_verif %} <span class="small mute">non vérifié depuis {{ b.jours_sans_verif }} jours</span>{% endif %}</div>
+      <div class="bien-titre mt-2">{{ b.type }}{% if b.pieces %} {{ b.pieces }} p.{% endif %}{% if b.surface %} · {{ b.surface|floatformat:0 }} m²{% endif %}{% if b.chambres %} · {{ b.chambres }} ch.{% endif %}{% for p in b.pastilles %} <span class="pastille-bien p-{{ p }}"{% if p == 'baisse' %} title="{{ b.baisse_texte }}"{% endif %}>{% if p == 'baisse' %}<i class="bi bi-arrow-down-short" aria-hidden="true"></i>baisse de prix<span class="visually-hidden"> : {{ b.baisse_texte }}</span>{% else %}{{ p }}{% endif %}</span>{% endfor %}{% if b.a_verifier %} <span class="a-verifier" title="{{ b.a_verifier|join:' ; ' }}"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> à vérifier<span class="visually-hidden"> : {{ b.a_verifier|join:' ; ' }}</span></span>{% endif %}{% if b.jours_sans_verif %} <span class="small mute">non vérifié depuis {{ b.jours_sans_verif }} jours</span>{% endif %}{% if b.jamais_verifie %} <span class="jamais-verifie" title="Agence sans vérification automatique : ce bien n'a pas été recontrôlé depuis son relevé. Vérifiez qu'il est toujours en vente."><i class="bi bi-clock-history" aria-hidden="true"></i> jamais revérifié · relevé le {{ b.releve_le|slice:"8:10" }}/{{ b.releve_le|slice:"5:7" }}</span>{% endif %}</div>
       <div class="bien-sous">{{ b.lieu }} · {{ b.agences|join:" + " }}</div>
       <div class="d-flex justify-content-between align-items-center mt-2">
         {% include 'analyseur/_ecart.html' %}
@@ -510,7 +513,8 @@
     biens.forEach(el => {
       const ok = (!verdicts.length || verdicts.includes(el.dataset.verdict))
         && (!type || el.dataset.type === type)
-        && (!pastille || (el.dataset.pastilles || '').split(' ').includes(pastille))
+        && (!pastille || (pastille === 'verifies' ? el.dataset.jamais !== '1'
+                         : (el.dataset.pastilles || '').split(' ').includes(pastille)))
         && num(el, 'surface') >= smin && num(el, 'pieces') >= pmin && num(el, 'chambres') >= cmin;
       el.classList.toggle('d-none', !ok);
       if (ok && el.tagName === 'TR') vus++;
