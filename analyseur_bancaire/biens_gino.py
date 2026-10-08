@@ -8,6 +8,7 @@ Les `_gino_*.json` contiennent TOUS les biens de l'agence ; les onglets Excel de
 eux, sont déjà filtrés par criteres.json — on ne les lit pas.
 """
 import json
+import os
 import re
 import statistics
 import time
@@ -335,13 +336,48 @@ def etat_veille(dossier):
     return data if isinstance(data, dict) else None
 
 
-def veille_en_cours(dossier, maintenant=None):
-    """Vrai si un contrôle tient le verrou depuis moins de 2 h (au-delà : abandonné)."""
+def _processus_vivant(pid):
+    """Vrai si le processus `pid` tourne encore (pid inconnu : on le croit vivant, par prudence).
+    Sous Windows, os.kill(pid, 0) TERMINERAIT le processus : on interroge Windows directement.
+    (Même règle que lib/veille/ecriture.py d'agence-immo : aucun code partagé entre les projets.)"""
     try:
-        debut = float(json.loads((Path(dossier) / "_veille.lock").read_text(encoding="utf-8")).get("debut", 0))
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return True
+    if pid <= 0:
+        return True
+    if os.name == "nt":
+        import ctypes
+        noyau = ctypes.WinDLL("kernel32", use_last_error=True)
+        poignee = noyau.OpenProcess(0x1000, False, pid)        # PROCESS_QUERY_LIMITED_INFORMATION
+        if not poignee:
+            return ctypes.get_last_error() == 5                 # accès refusé : il existe
+        code = ctypes.c_ulong()
+        try:
+            lu = noyau.GetExitCodeProcess(poignee, ctypes.byref(code))
+        finally:
+            noyau.CloseHandle(poignee)
+        return not lu or code.value == 259                      # STILL_ACTIVE
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def veille_en_cours(dossier, maintenant=None):
+    """Vrai si un contrôle tient le verrou depuis moins de 2 h ET que son processus vit
+    encore : un contrôle tué (PC en veille, fenêtre fermée) n'affiche plus « en cours »."""
+    try:
+        verrou = json.loads((Path(dossier) / "_veille.lock").read_text(encoding="utf-8"))
+        debut = float(verrou.get("debut", 0))
     except (OSError, ValueError, AttributeError, TypeError):
         return False
-    return (maintenant or time.time()) - debut < 2 * 3600
+    if (maintenant or time.time()) - debut >= 2 * 3600:
+        return False
+    return _processus_vivant(verrou.get("pid"))
 
 
 def agences_veille(dossier):

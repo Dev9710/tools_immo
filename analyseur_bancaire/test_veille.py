@@ -42,8 +42,10 @@ def ecrire_etat(etat=ETAT):
     (VILLE / "_veille_etat.json").write_text(json.dumps(etat), encoding="utf-8")
 
 
-def verrouiller(debut=None):
-    (VILLE / "_veille.lock").write_text(json.dumps({"pid": 1, "debut": debut or time.time()}), encoding="utf-8")
+def verrouiller(debut=None, pid=None):
+    import os
+    (VILLE / "_veille.lock").write_text(json.dumps({"pid": pid or os.getpid(), "debut": debut or time.time()}),
+                                        encoding="utf-8")
 
 
 def deverrouiller():
@@ -72,6 +74,15 @@ class LectureEtatTests(SimpleTestCase):
         self.assertTrue(biens_gino.veille_en_cours(VILLE))
         verrouiller(debut=time.time() - 3 * 3600)        # abandonné
         self.assertFalse(biens_gino.veille_en_cours(VILLE))
+
+    def test_veille_dont_le_processus_est_mort_n_est_plus_en_cours(self):
+        # Contrôle tué (PC en veille…) : la page ne doit pas afficher « en cours » pendant 2 h.
+        import subprocess, sys
+        fini = subprocess.Popen([sys.executable, "-c", "pass"])
+        fini.wait()
+        verrouiller(pid=fini.pid)
+        self.assertFalse(biens_gino.veille_en_cours(VILLE))
+        deverrouiller()
 
     def test_agences_veille_noms_et_ordre(self):
         a = biens_gino.agences_veille(VILLE)
