@@ -552,7 +552,7 @@
     .then(e => {
       if (!e.en_cours) { location.reload(); return; }
       const a = e.avancement || {};
-      zone.textContent = `Agence ${Math.min((a.fait || 0) + 1, a.total || 1)} sur ${a.total || '?'} : ${a.agence || '…'}`;
+      zone.textContent = `${a.fait || 0} agence${(a.fait || 0) > 1 ? 's' : ''} sur ${a.total || '?'} vérifiée${(a.fait || 0) > 1 ? 's' : ''} · en cours : ${a.agence || '…'}`;
       setTimeout(suivre, 2000);
     })
     .catch(() => setTimeout(suivre, 4000));
