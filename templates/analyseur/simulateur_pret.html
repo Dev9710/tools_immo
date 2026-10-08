@@ -53,6 +53,16 @@
     .sp-jauge[data-niveau="limite"] span { background: var(--warn-dot); }
     .sp-jauge[data-niveau="hors"] span { background: var(--ko-dot); }
     .sp-jauge::after { content: ""; position: absolute; left: 70%; top: -3px; bottom: -3px; width: 2px; border-radius: 2px; background: var(--ink-2); opacity: .35; }
+    .sp-taux { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--brand-line);
+        background: var(--brand-soft); border-radius: 12px; }
+    .sp-taux > div { padding: .6rem .85rem; display: flex; flex-direction: column; }
+    .sp-taux > div + div { border-left: 1px solid var(--brand-line); }
+    .sp-taux .k { font-size: .75rem; color: var(--ink-2); font-weight: 500; }
+    .sp-taux .v { font-size: 1.1rem; font-weight: 650; color: var(--brand); font-variant-numeric: tabular-nums; }
+    .sp-taux-source { font-size: .75rem; color: var(--mute); margin: .4rem 0 0; }
+    .sp-taux-applique { font-size: .85rem; color: var(--ink-2); background: var(--soft); border: 1px solid var(--hair);
+        border-radius: 10px; padding: .55rem .8rem; }
+    .sp-taux-applique i { color: var(--brand); }
     .sp-details { display: grid; grid-template-columns: 1fr auto; gap: .45rem 1rem; font-size: .88rem; margin: .75rem 0 0; }
     .sp-details dt { font-weight: 400; color: var(--mute); }
     .sp-details dd { margin: 0; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -192,6 +202,7 @@
                                 <option value="risque"{% if saisie.profil|default:'moyen' == 'risque' %} selected{% endif %}>Fragile (CDD, intérim)</option>
                             </select>
                         </div>
+                        <div class="plein sp-taux-applique" id="taux-applique" aria-live="polite" hidden></div>
                     </div>
                 </div>
 
@@ -308,6 +319,7 @@
 // Montant arrondi à l'euro, avec espaces : 315 830 €
 const eur = v => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Math.round(v || 0)) + ' €';
 const pct = v => String(v).replace('.', ',') + ' %';
+const taux = v => Number(v).toFixed(2).replace('.', ',') + ' %';
 const contenu = document.getElementById('sp-contenu');
 const etat = document.getElementById('sp-etat');
 const mini = document.getElementById('sp-mini');
@@ -333,6 +345,19 @@ async function calculer() {
     const [form, mode] = formulaireActif();
     const champ = mode === 'capacite' ? form.revenus_nets : form.montant_emprunt;
     if (!champ.value || Number(champ.value) <= 0) { afficherVide(mode); return; }
+    // Un champ hors limites (ex. âge 14 ans) fausserait le résultat : on le signale au lieu de calculer.
+    const invalide = [...form.querySelectorAll('input')].find(i => !i.checkValidity());
+    form.querySelectorAll('.is-invalid').forEach(i => i.classList.remove('is-invalid'));
+    if (invalide) {
+        invalide.classList.add('is-invalid');
+        const nom = form.querySelector(`label[for="${invalide.id}"]`)?.firstChild?.textContent.trim() || 'Un champ';
+        const bornes = invalide.min && invalide.max ? ` (entre ${invalide.min} et ${invalide.max})` : '';
+        contenu.innerHTML = `<div class="alert alert-warning small mb-0" role="alert">
+            <strong>${nom} : valeur à corriger${bornes}.</strong> Le résultat se mettra à jour dès que ce sera fait.</div>`;
+        etat.textContent = '';
+        mini.classList.remove('visible');
+        return;
+    }
 
     if (requete) requete.abort();
     requete = new AbortController();
@@ -409,6 +434,12 @@ function afficherCapacite(d, saisie) {
             <div class="sp-stat"><div class="k">Reste à vivre</div>
                 <div class="v ${alerte ? (alerte.type === 'danger' ? 'text-danger' : 'text-warning') : 'text-success'}">${eur(d.reste_a_vivre)}</div></div>
         </div>
+        <div class="sp-taux mt-2" aria-label="Taux de votre prêt">
+            <div><span class="k">Taux du prêt</span><span class="v">${taux(d.taux_nominal)}</span></div>
+            <div><span class="k">Assurance</span><span class="v">${taux(d.taux_assurance)}</span></div>
+            <div><span class="k">TAEG</span><span class="v">${taux(d.taeg)}</span></div>
+        </div>
+        <p class="sp-taux-source">Barème {{ bareme.source }} du {{ bareme.date }}, pour ${saisie.duree} ans. Le TAEG compte le taux et l'assurance.</p>
         ${alerte ? `<div class="alert alert-${alerte.type} small mt-3 mb-0"><strong>${alerte.message}</strong> ${alerte.conseil}</div>` : ''}
         ${sautDeCharge(d.mensualite_max)}
         <details class="sp-plier mt-3">
@@ -416,9 +447,6 @@ function afficherCapacite(d, saisie) {
             ${barreRepartition([['Emprunt', d.capacite_emprunt, '#4f46e5'], ['Apport', d.apport, '#10b981'],
                                 ['Intérêts', d.cout_interets, '#f59e0b'], ['Notaire', d.frais_notaire, '#94a3b8']])}
             <dl class="sp-details">
-                <dt>Taux du prêt</dt><dd>${pct(d.taux_nominal)}</dd>
-                <dt>Assurance</dt><dd>${pct(d.taux_assurance)}</dd>
-                <dt>TAEG</dt><dd>${pct(d.taeg)}</dd>
                 <dt>Frais de notaire</dt><dd>${eur(d.frais_notaire)}</dd>
                 <dt>Coût des intérêts</dt><dd>${eur(d.cout_interets)}</dd>
             </dl>
@@ -427,6 +455,10 @@ function afficherCapacite(d, saisie) {
             Voir les biens à ce prix <i class="bi bi-arrow-right ms-1" aria-hidden="true"></i></a>
         <a class="btn btn-link w-100 btn-sm mt-1 text-decoration-none" href="{% url 'dashboard' %}">
             Ajouté à mon dossier · ${d.statut_dossier || ''}</a>`;
+    const applique = document.getElementById('taux-applique');
+    applique.innerHTML = `<i class="bi bi-percent" aria-hidden="true"></i> Taux appliqué : <strong>${taux(d.taux_nominal)}</strong>
+        + assurance ${taux(d.taux_assurance)}. Il change avec la durée, la région et le profil.`;
+    applique.hidden = false;
     document.getElementById('sp-mini-v').textContent = eur(d.prix_achat_max);
     mini.classList.add('visible');
 }
