@@ -109,6 +109,18 @@ class ChargerVilleTests(SimpleTestCase):
         self.assertEqual(bg.villes(self.tmp),
                          [{"slug": "champigny-sur-marne", "nom": "Champigny-sur-Marne"}])
 
+    def test_nom_de_ville_accentue_lu_dans_les_adresses_de_stan(self):
+        ville(self.tmp / "creteil", {"_gino_a.json": []}, stan=[
+            {"nom": "A", "adresse": "1 rue X, 94000 Créteil"},
+            {"nom": "B", "adresse": "2 rue Y, 94010 Créteil"},
+            {"nom": "C", "adresse": "3 rue Z, 94400 Vitry-sur-Seine"},   # autre ville : ignorée
+        ])
+        ville(self.tmp / "l-hay-les-roses", {"_gino_a.json": []},
+              stan=[{"nom": "A", "adresse": "5 av. Y, 94240 L'Haÿ-les-Roses"}])
+        ville(self.tmp / "thiais", {"_gino_a.json": []}, stan="cassé")   # repli sur le dossier
+        self.assertEqual([v["nom"] for v in bg.villes(self.tmp)],
+                         ["Créteil", "L'Haÿ-les-Roses", "Thiais"])
+
     def test_type_vide_ou_inconnu_garde_s_il_est_a_verifier(self):
         """Le moteur de vérification signale « type illisible » : le bien reste visible, type « Bien »."""
         d = ville(self.tmp / "sans-type", {

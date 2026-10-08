@@ -261,3 +261,20 @@ class AccueilParcoursTests(SimpleTestCase):
         r = self.client.get(reverse('accueil'))
         self.assertEqual(r.context['prochaine_etape'], 3)
         self.assertContains(r, '€ prix maximum')
+
+
+class AnneeDuReleveTests(SimpleTestCase):
+    """Un relevé édité en janvier couvre aussi décembre de l'année d'avant."""
+
+    def test_releve_a_cheval_sur_deux_ans(self):
+        from .views import BanquePostaleParserSimple
+        annee_de = BanquePostaleParserSimple().build_year_resolver(
+            "Relevé édité le 12 janvier 2026")
+        self.assertEqual(annee_de(12), 2025)
+        self.assertEqual(annee_de(1), 2026)
+
+    def test_releve_dans_la_meme_annee(self):
+        from .views import BanquePostaleParserSimple
+        annee_de = BanquePostaleParserSimple().build_year_resolver(
+            "Relevé édité le 12 septembre 2025")
+        self.assertEqual((annee_de(8), annee_de(9)), (2025, 2025))
