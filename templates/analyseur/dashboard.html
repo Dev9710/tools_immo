@@ -1,145 +1,85 @@
 {% extends 'analyseur/base.html' %}
 
-{% block title %}Dashboard - Mon Dossier Immobilier{% endblock %}
+{% block title %}Mon dossier{% endblock %}
 
-{% block nav_style %}background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);{% endblock %}
-
-{% block nav_title %}Mon Dossier Immobilier{% endblock %}
-
-{% block nav_buttons %}
-<a href="{% url 'accueil' %}" class="btn btn-outline-light">
-    <i class="bi bi-house"></i> Accueil
-</a>
+{% block extra_css %}
+<style>
+    .md-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
+    @media (max-width: 991.98px) { .md-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .md-kpi { padding: 1.1rem 1.25rem; }
+    .md-kpi .k { font-size: .8rem; font-weight: 500; color: var(--mute); display: flex; align-items: center; gap: .4rem; }
+    .md-kpi .v { font-size: 1.6rem; font-weight: 650; letter-spacing: -.03em; margin-top: .35rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .md-kpi .v small { font-size: .55em; font-weight: 500; color: var(--mute); letter-spacing: 0; }
+    .md-etape { display: flex; gap: 1rem; align-items: center; padding: 1.25rem; }
+    .md-pieces { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem 1.5rem; }
+    @media (max-width: 575.98px) { .md-pieces { grid-template-columns: 1fr; } }
+    .md-pieces li { display: flex; gap: .55rem; align-items: baseline; font-size: .92rem; color: var(--ink-2); }
+    .md-pieces i { color: var(--brand); }
+</style>
 {% endblock %}
 
 {% block content %}
-<div class="container py-5">
-    <div class="row">
-        <div class="col-lg-10 mx-auto">
-            <div class="card shadow-lg border-0">
-                <div class="card-header text-white" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
-                    <h3 class="mb-0">
-                        <i class="bi bi-clipboard-data me-2"></i>Mon Dossier Immobilier
-                    </h3>
-                    <p class="mb-0 mt-2 opacity-75">Synthèse de votre situation financière</p>
-                </div>
-                <div class="card-body p-4">
-                    <div class="row g-4 mb-4">
-                        <div class="col-md-3">
-                            <div class="card bg-success text-white shadow">
-                                <div class="card-body text-center p-3">
-                                    <i class="bi bi-wallet2 display-6 mb-2"></i>
-                                    <h6 class="mb-1">Revenus nets</h6>
-                                    <h4 class="mb-0">{{ dossier.revenus_nets|default:"0" }} €</h4>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="card bg-warning text-dark shadow">
-                                <div class="card-body text-center p-3">
-                                    <i class="bi bi-calculator display-6 mb-2"></i>
-                                    <h6 class="mb-1">Charges fixes</h6>
-                                    <h4 class="mb-0">{{ dossier.charges_fixes|default:"0" }} €</h4>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="card bg-info text-white shadow">
-                                <div class="card-body text-center p-3">
-                                    <i class="bi bi-piggy-bank display-6 mb-2"></i>
-                                    <h6 class="mb-1">Capacité</h6>
-                                    <h4 class="mb-0">{{ dossier.capacite_calculee|default:"0" }} €</h4>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="card bg-primary text-white shadow">
-                                <div class="card-body text-center p-3">
-                                    <i class="bi bi-check-circle display-6 mb-2"></i>
-                                    <h6 class="mb-1">Statut</h6>
-                                    <small class="fw-bold">{{ dossier.statut_dossier }}</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+<div class="container" style="max-width: 1040px;">
+    <header class="ti-entete d-flex flex-wrap align-items-end justify-content-between gap-3">
+        <div>
+            <span class="ti-surtitre"><span class="point{% if dossier.statut_dossier != 'Prêt pour RDV banque' %} attente{% endif %}"></span>{{ dossier.statut_dossier }}</span>
+            <h1>Mon dossier</h1>
+            <p class="lede">Votre situation en un coup d'œil, prête à montrer à la banque.</p>
+        </div>
+        <a href="{% url 'export_dossier_pdf' %}" class="btn btn-primary btn-lg">
+            <i class="bi bi-file-earmark-pdf me-1" aria-hidden="true"></i>Exporter en PDF
+        </a>
+    </header>
 
-                    <!-- Section informative améliorée -->
-                    <div class="row mb-4">
-                        <div class="col-lg-8 mx-auto">
-                            <div class="alert alert-info border-0 shadow-sm">
-                                <h6 class="alert-heading">
-                                    <i class="bi bi-info-circle me-2"></i>Analyse de votre dossier
-                                </h6>
-                                {% if dossier.revenus_nets %}
-                                    <p class="mb-2">
-                                        <strong>Taux d'endettement projeté :</strong>
-                                        <span class="{% if dossier.taux_endettement > 33 %}text-danger{% elif dossier.taux_endettement > 25 %}text-warning{% else %}text-success{% endif %}">
-                                            {{ dossier.taux_endettement|floatformat:1 }}%
-                                        </span>
-                                    </p>
-                                {% endif %}
-                                
-                                {% if dossier.capacite_calculee > 0 %}
-                                <p class="mb-0">
-                                    <strong>Prochaine étape :</strong> Préparez vos documents pour un rendez-vous banque
-                                </p>
-                                {% else %}
-                                <p class="mb-0">
-                                    <strong>Prochaine étape :</strong> Complétez votre simulation de capacité d'emprunt
-                                </p>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Boutons d'action -->
-                    <div class="text-center">
-                        <div class="btn-group mb-3" role="group">
-                            <a href="{% url 'export_dossier_pdf' %}" class="btn btn-primary btn-lg">
-                                <i class="bi bi-file-pdf me-2"></i>Exporter PDF
-                            </a>
-                            <a href="{% url 'simulateur_pret' %}" class="btn btn-outline-primary btn-lg">
-                                <i class="bi bi-calculator me-2"></i>Nouvelle simulation
-                            </a>
-                        </div>
-                        
-                        <div class="d-block">
-                            <a href="{% url 'accueil' %}" class="btn btn-outline-secondary">
-                                <i class="bi bi-arrow-left me-2"></i>Retour à l'accueil
-                            </a>
-                        </div>
-                    </div>
-
-                    <!-- Section conseils -->
-                    <div class="row mt-5">
-                        <div class="col-lg-8 mx-auto">
-                            <div class="card bg-light border-0">
-                                <div class="card-body p-4">
-                                    <h6 class="card-title text-center mb-3">
-                                        <i class="bi bi-lightbulb text-warning me-2"></i>Conseils pour optimiser votre dossier
-                                    </h6>
-                                    <div class="row g-3">
-                                        <div class="col-md-6">
-                                            <ul class="list-unstyled small">
-                                                <li class="mb-2"><i class="bi bi-check text-success me-2"></i>Apport minimum 10% du prix</li>
-                                                <li class="mb-2"><i class="bi bi-check text-success me-2"></i>3 derniers bulletins de salaire</li>
-                                                <li class="mb-2"><i class="bi bi-check text-success me-2"></i>Relevés bancaires 3 mois</li>
-                                            </ul>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <ul class="list-unstyled small">
-                                                <li class="mb-2"><i class="bi bi-check text-success me-2"></i>Contrat de travail</li>
-                                                <li class="mb-2"><i class="bi bi-check text-success me-2"></i>Avis d'imposition N-1</li>
-                                                <li class="mb-2"><i class="bi bi-check text-success me-2"></i>Justificatifs patrimoine</li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+    <div class="md-kpis">
+        <div class="ti-carte md-kpi">
+            <div class="k"><i class="bi bi-wallet2" aria-hidden="true"></i>Revenus nets</div>
+            <div class="v">{% if dossier.revenus_nets %}{{ dossier.revenus_nets|floatformat:"0g" }} <small>€ / mois</small>{% else %}–{% endif %}</div>
+        </div>
+        <div class="ti-carte md-kpi">
+            <div class="k"><i class="bi bi-list-check" aria-hidden="true"></i>Charges</div>
+            <div class="v">{% if dossier.charges_fixes %}{{ dossier.charges_fixes|floatformat:"0g" }} <small>€ / mois</small>{% else %}–{% endif %}</div>
+        </div>
+        <div class="ti-carte md-kpi">
+            <div class="k"><i class="bi bi-piggy-bank" aria-hidden="true"></i>Capacité d'emprunt</div>
+            <div class="v">{% if dossier.capacite_calculee %}{{ dossier.capacite_calculee|floatformat:"0g" }} <small>€</small>{% else %}–{% endif %}</div>
+        </div>
+        <div class="ti-carte md-kpi">
+            <div class="k"><i class="bi bi-speedometer2" aria-hidden="true"></i>Endettement</div>
+            <div class="v {% if dossier.taux_endettement > 35 %}text-danger{% elif dossier.taux_endettement > 33 %}text-warning{% elif dossier.taux_endettement %}text-success{% endif %}">
+                {% if dossier.revenus_nets %}{{ dossier.taux_endettement|floatformat:1 }} <small>%</small>{% else %}–{% endif %}
             </div>
+        </div>
+    </div>
+
+    <div class="ti-carte md-etape mt-3">
+        <span class="ti-icone-carre"><i class="bi bi-signpost-2" aria-hidden="true"></i></span>
+        <div class="flex-grow-1">
+            <div class="fw-semibold">Prochaine étape</div>
+            {% if dossier.capacite_calculee > 0 %}
+                <div class="text-muted small">Rassemblez les pièces ci-dessous et prenez rendez-vous avec votre banque.</div>
+            {% else %}
+                <div class="text-muted small">Calculez votre capacité d'emprunt pour compléter le dossier.</div>
+            {% endif %}
+        </div>
+        {% if dossier.capacite_calculee > 0 %}
+            <a href="{% url 'biens_financables' %}" class="btn btn-outline-primary">Voir les biens</a>
+        {% else %}
+            <a href="{% url 'simulateur_pret' %}" class="btn btn-primary">Lancer le simulateur</a>
+        {% endif %}
+    </div>
+
+    <div class="card mt-3">
+        <div class="card-header">Pièces à préparer pour la banque</div>
+        <div class="card-body px-4">
+            <ul class="md-pieces">
+                <li><i class="bi bi-check2-circle" aria-hidden="true"></i>3 derniers bulletins de salaire</li>
+                <li><i class="bi bi-check2-circle" aria-hidden="true"></i>Relevés de compte des 3 derniers mois</li>
+                <li><i class="bi bi-check2-circle" aria-hidden="true"></i>Contrat de travail</li>
+                <li><i class="bi bi-check2-circle" aria-hidden="true"></i>Dernier avis d'imposition</li>
+                <li><i class="bi bi-check2-circle" aria-hidden="true"></i>Justificatifs d'épargne et d'apport</li>
+                <li><i class="bi bi-check2-circle" aria-hidden="true"></i>Apport conseillé : 10 % du prix</li>
+            </ul>
         </div>
     </div>
 </div>

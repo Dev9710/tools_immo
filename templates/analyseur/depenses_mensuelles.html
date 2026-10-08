@@ -1,33 +1,32 @@
 {% extends 'analyseur/base.html' %}
 
 {% block title %}Mes dépenses mensuelles{% endblock %}
-{% block nav_title %}Mes dépenses mensuelles{% endblock %}
 
 {% block extra_css %}
 <style>
-    .dm-shell { background: #f4f5f7; }
+    .dm-shell { background: transparent; }
     .dm-card {
         background: #fff;
-        border: 1px solid rgba(15, 23, 42, .07);
-        border-radius: 20px;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 12px 32px -18px rgba(15, 23, 42, .35);
+        border: 1px solid var(--hair);
+        border-radius: var(--rayon);
+        box-shadow: var(--ombre);
     }
     .dm-label {
         font-size: .8rem;
         font-weight: 600;
         letter-spacing: .06em;
         text-transform: uppercase;
-        color: #64748b;
+        color: var(--mute);
     }
     .dm-metric {
         font-size: clamp(2.75rem, 7vw, 4.25rem);
         font-weight: 700;
         line-height: 1;
         letter-spacing: -.03em;
-        color: #0f172a;
+        color: var(--ink);
         font-variant-numeric: tabular-nums;
     }
-    .dm-metric small { font-size: 1.5rem; font-weight: 600; color: #64748b; }
+    .dm-metric small { font-size: 1.5rem; font-weight: 600; color: var(--mute); }
 
     .dm-badge {
         display: inline-flex;
@@ -40,7 +39,7 @@
     }
     .dm-badge-hausse { background: #fef2f2; color: #b91c1c; }
     .dm-badge-baisse { background: #f0fdf4; color: #15803d; }
-    .dm-badge-stable { background: #eff6ff; color: #1d4ed8; }
+    .dm-badge-stable { background: var(--brand-soft); color: var(--brand); }
 
     /* Bloc secondaire : fond neutre, pastille fléchée, léger relief au survol */
     .dm-subcard {
@@ -75,7 +74,7 @@
     .dm-bar-wrap > .dm-bar { width: 100%; max-width: 130px; margin: 0 auto; }
     .dm-bar {
         border-radius: 10px 10px 4px 4px;
-        background: linear-gradient(180deg, #3b6fe0 0%, #2549b5 100%);
+        background: var(--brand);
         min-height: 6px;
         transition: filter .2s ease;
     }
@@ -83,15 +82,15 @@
     .dm-bar-partiel {
         background: repeating-linear-gradient(135deg, #cbd5e1 0 7px, #e2e8f0 7px 14px);
     }
-    .dm-bar-value { font-size: .95rem; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; }
-    .dm-bar-name { font-size: .8rem; color: #64748b; }
+    .dm-bar-value { font-size: .95rem; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+    .dm-bar-name { font-size: .8rem; color: var(--mute); }
 
     .dm-cat-track { height: 8px; background: #eef2f7; border-radius: 999px; overflow: hidden; }
-    .dm-cat-fill { height: 100%; border-radius: 999px; background: #3b6fe0; }
-    .dm-cat-fill.c1 { background: #2549b5; }
-    .dm-cat-fill.c2 { background: #3b6fe0; }
-    .dm-cat-fill.c3 { background: #7aa0f0; }
-    .dm-cat-fill.c4 { background: #b6cbf7; }
+    .dm-cat-fill { height: 100%; border-radius: 999px; background: #6366f1; }
+    .dm-cat-fill.c1 { background: var(--brand); }
+    .dm-cat-fill.c2 { background: #6366f1; }
+    .dm-cat-fill.c3 { background: #a5b4fc; }
+    .dm-cat-fill.c4 { background: #c7d2fe; }
 
     .dm-dropzone {
         border: 2px dashed #c3ccdb;
@@ -102,7 +101,7 @@
         transition: border-color .2s ease, background .2s ease;
         cursor: pointer;
     }
-    .dm-dropzone:hover, .dm-dropzone.is-over { border-color: #3b6fe0; background: #f2f6ff; }
+    .dm-dropzone:hover, .dm-dropzone.is-over { border-color: #6366f1; background: var(--brand-soft); }
     /* L'input reste focusable au clavier (d-none le sortirait de l'ordre de
        tabulation) : on le masque visuellement, et c'est la dropzone qui porte
        l'indicateur de focus. */
@@ -113,14 +112,14 @@
         pointer-events: none;
     }
     .dm-dropzone:focus-within {
-        border-color: #2549b5;
-        background: #f2f6ff;
+        border-color: var(--brand);
+        background: var(--brand-soft);
         outline: 3px solid rgba(59, 111, 224, .35);
         outline-offset: 2px;
     }
     .dm-step-num {
         width: 30px; height: 30px; border-radius: 999px;
-        background: #0f172a; color: #fff;
+        background: var(--ink); color: #fff;
         display: inline-flex; align-items: center; justify-content: center;
         font-size: .85rem; font-weight: 700; flex: 0 0 auto;
     }
@@ -129,7 +128,7 @@
     /* --- Indicateurs clés --------------------------------------------- */
     .dm-kpi {
         background: #f8fafc;
-        border: 1px solid rgba(15, 23, 42, .07);
+        border: 1px solid var(--hair);
         border-radius: 14px;
         padding: 1rem 1.1rem;
         height: 100%;
@@ -138,18 +137,18 @@
     .dm-kpi-out { background: #fef6f6; border-color: rgba(185, 28, 28, .14); }
     .dm-kpi-label {
         font-size: .72rem; font-weight: 700; letter-spacing: .08em;
-        text-transform: uppercase; color: #64748b;
+        text-transform: uppercase; color: var(--mute);
     }
     .dm-kpi-value {
         font-size: 1.85rem; font-weight: 700; line-height: 1.1;
-        letter-spacing: -.02em; color: #0f172a;
+        letter-spacing: -.02em; color: var(--ink);
         font-variant-numeric: tabular-nums; margin-top: .25rem;
     }
-    .dm-kpi-unit { font-size: .78rem; color: #64748b; margin-top: .15rem; }
+    .dm-kpi-unit { font-size: .78rem; color: var(--mute); margin-top: .15rem; }
     .dm-corrige {
-        background: #eff6ff; border: 1px solid rgba(37, 73, 181, .18);
+        background: var(--brand-soft); border: 1px solid var(--brand-line);
         border-radius: 12px; padding: .75rem 1rem;
-        font-size: .875rem; color: #1e3a8a;
+        font-size: .875rem; color: #3730a3;
     }
     .dm-corrige span { font-variant-numeric: tabular-nums; font-weight: 600; }
 
@@ -157,15 +156,15 @@
     .dm-legende { display: flex; gap: 1.25rem; font-size: .82rem; color: #475569; }
     .dm-legende span { display: inline-flex; align-items: center; gap: .4rem; }
     .dm-puce { width: 12px; height: 12px; border-radius: 4px; display: inline-block; }
-    .dm-puce-in { background: #16a34a; }
-    .dm-puce-out { background: #2549b5; }
+    .dm-puce-in { background: #10b981; }
+    .dm-puce-out { background: var(--brand); }
     .dm-paire { display: flex; gap: 6px; align-items: flex-end; height: 100%;
                 justify-content: center; }
     .dm-col { display: flex; flex-direction: column; justify-content: flex-end;
               height: 100%; width: 100%; max-width: 62px; }
-    .dm-bar-in { background: linear-gradient(180deg, #22c55e 0%, #15803d 100%); }
-    .dm-bar-out { background: linear-gradient(180deg, #3b6fe0 0%, #2549b5 100%); }
-    .dm-bar-value { font-size: .72rem; font-weight: 700; color: #0f172a;
+    .dm-bar-in { background: #10b981; }
+    .dm-bar-out { background: var(--brand); }
+    .dm-bar-value { font-size: .72rem; font-weight: 700; color: var(--ink);
                     font-variant-numeric: tabular-nums; text-align: center;
                     margin-bottom: .25rem; }
 
@@ -175,8 +174,8 @@
         border-radius: 999px; text-transform: uppercase; letter-spacing: .04em;
     }
     .dm-tag-in { background: #dcfce7; color: #15803d; }
-    .dm-tag-out { background: #e7edf5; color: #2549b5; }
-    .dm-cat-in { background: #16a34a !important; }
+    .dm-tag-out { background: #e7edf5; color: var(--brand); }
+    .dm-cat-in { background: #10b981 !important; }
     /* Un mois chargé dépasse la centaine de lignes : on plafonne la hauteur
        pour que l'accordéon reste manipulable. */
     .dm-ops { max-height: 460px; overflow-y: auto; }
@@ -187,7 +186,7 @@
 
     .dm-detail > summary {
         cursor: pointer;
-        color: #2549b5;
+        color: var(--brand);
         padding: .5rem .75rem;
         border-radius: 10px;
         background: #f1f5f9;
@@ -204,7 +203,7 @@
   document.body.dataset.sorties = '{{ analyse.resume.sorties_moyennes|stringformat:"f" }}';
 </script>
 {% endif %}
-<section class="dm-shell py-5">
+<section class="dm-shell pb-4">
   <div class="container" style="max-width: 980px;">
 
     {% if error %}
@@ -216,6 +215,11 @@
 
     {% if analyse %}
     <!-- ================= TABLEAU DE BORD ================= -->
+    <header class="ti-entete">
+      <span class="ti-surtitre"><span class="point"></span>Étape 1 · Mes dépenses</span>
+      <h1>Ce qui entre et sort chaque mois</h1>
+      <p class="lede">Moyennes calculées sur vos mois complets. Elles sont reprises dans le simulateur.</p>
+    </header>
 
     <!-- 1. Métriques clés -->
     <div class="dm-card p-4 p-md-5 mb-4">
@@ -663,13 +667,11 @@
     {% else %}
     <!-- ================= FORMULAIRE ================= -->
 
-    <div class="text-center mb-5">
-      <h1 class="fw-bold" style="letter-spacing: -.02em;">Combien je dépense chaque mois ?</h1>
-      <p class="text-muted mb-0" style="max-width: 620px; margin: 0 auto;">
-        Déposez vos relevés : l'outil additionne tout ce qui sort du compte — courses,
-        essence, prélèvements, chèques — et vous donne votre moyenne mensuelle et son évolution.
-      </p>
-    </div>
+    <header class="ti-entete">
+      <span class="ti-surtitre"><span class="point"></span>Étape 1 · Mes dépenses</span>
+      <h1>Combien dépensez-vous chaque mois&nbsp;?</h1>
+      <p class="lede">Déposez vos relevés PDF : vous obtenez votre moyenne mensuelle, poste par poste.</p>
+    </header>
 
     <div class="dm-card p-4 p-md-5 mb-4">
       <form method="post" enctype="multipart/form-data" id="formDepenses">

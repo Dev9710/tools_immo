@@ -1,45 +1,26 @@
 {% extends 'analyseur/base.html' %}
 
-{% block title %}Sélection Charges Fixes par Mois{% endblock %}
-
-{% block nav_style %}background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);{% endblock %}
-
-{% block nav_title %}Sélection Charges Fixes{% endblock %}
-
-{% block nav_buttons %}
-<div class="navbar-text text-white d-flex align-items-center">
-    <span class="me-3"><i class="bi bi-files"></i> Fichier(s): {{ nb_fichiers }}</span>
-    <strong class="me-3">Total: <span id="totalCharges" class="text-warning">0,00</span> €</strong>
-    <button class="btn btn-outline-light btn-sm" id="copyBtn" onclick="copyTotal()" title="Copier le montant">
-        <i class="bi bi-copy" id="copyIcon"></i>
-    </button>
-</div>
-{% endblock %}
+{% block title %}Charges fixes{% endblock %}
 
 {% block content %}
-<div class="container py-4">
-    <div class="row mb-4">
-        <div class="col-lg-6 mx-auto">
-            <div class="card border-warning shadow">
-                <div class="card-header bg-warning text-dark text-center">
-                    <h5 class="mb-0">
-                        <i class="bi bi-calendar-month me-2"></i>Période de calcul
-                    </h5>
-                </div>
-                <div class="card-body p-3">
-                    <select class="form-select form-select-lg" id="moisFiltre" onchange="filtrerParMois()">
-                        <option value="tous">Période complète (tous les mois)</option>
-                        {% for mois_code, mois_nom in mois_disponibles %}
-                        <option value="{{ mois_code }}">{{ mois_nom }}</option>
-                        {% endfor %}
-                    </select>
-                    <div class="form-text text-center mt-2">
-                        <strong>Recommandé :</strong> Sélectionnez un mois spécifique pour un calcul précis
-                    </div>
-                </div>
-            </div>
+<div class="container">
+    <header class="ti-entete d-flex flex-wrap align-items-end justify-content-between gap-3">
+        <div>
+            <span class="ti-surtitre"><span class="point"></span>Outil · Charges fixes</span>
+            <h1>Cochez ce qui revient chaque mois</h1>
+            <p class="lede">Les prélèvements sont cochés d'office. Ajoutez vos abonnements payés par carte.</p>
         </div>
-    </div>
+        <div style="min-width: 16rem;">
+            <label class="form-label" for="moisFiltre">Mois à compter</label>
+            <select class="form-select" id="moisFiltre" onchange="filtrerParMois()">
+                <option value="tous">Toute la période</option>
+                {% for mois_code, mois_nom in mois_disponibles %}
+                <option value="{{ mois_code }}">{{ mois_nom }}</option>
+                {% endfor %}
+            </select>
+            <div class="form-text">Un seul mois donne le total le plus juste.</div>
+        </div>
+    </header>
 
     <div class="row">
         <div class="col-lg-6 mb-4">
@@ -49,7 +30,7 @@
                         <i class="bi bi-check-circle me-2"></i>
                         <span id="prelevementsTitle">Prélèvements ({{ prelevements|length }})</span>
                     </h5>
-                    <small class="opacity-75">Tous pré-sélectionnés comme charges fixes</small>
+                    <small>Tous cochés d'office</small>
                 </div>
                 <div class="card-body p-0" style="max-height: 500px; overflow-y: auto;">
                     <div id="prelevements-list">
@@ -64,9 +45,9 @@
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">
                         <i class="bi bi-credit-card me-2"></i>
-                        <span id="achatsTitle">Achats CB ({{ achats_cb|length }})</span>
+                        <span id="achatsTitle">Achats carte ({{ achats_cb|length }})</span>
                     </h5>
-                    <small class="opacity-75">Sélectionnez vos abonnements/charges récurrentes</small>
+                    <small>Cochez vos abonnements</small>
                 </div>
                 <div class="card-body p-0" style="max-height: 500px; overflow-y: auto;">
                     <div id="achats-list">
@@ -82,7 +63,7 @@
             <i class="bi bi-arrow-left"></i> Retour
         </button>
         <button class="btn btn-success btn-lg px-4 shadow" onclick="exportCharges()" id="exportBtn" disabled>
-            <i class="bi bi-download me-2"></i>Exporter les Charges Sélectionnées
+            <i class="bi bi-download me-2"></i>Exporter les charges cochées
         </button>
     </div>
 </div>
@@ -134,7 +115,7 @@ function initAchats() {
     
     container.innerHTML = '';
     document.getElementById('achatsTitle').textContent = 
-        `Achats CB (${achatsFiltres.length})`;
+        `Achats carte (${achatsFiltres.length})`;
     
     achatsFiltres.forEach((op, index) => {
         container.innerHTML += createOperationCard(op, index + 1000, false, false, 'primary');

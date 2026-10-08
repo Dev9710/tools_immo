@@ -3,55 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Suite Immobilière Banque Postale{% endblock %}</title>
+    <title>{% block title %}Mon projet immo{% endblock %} · Mon projet immo</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    {% include "analyseur/_theme.html" %}
     {% block extra_css %}{% endblock %}
-    <style>
-        .hero-section {
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-            color: white;
-        }
-        .card-hover:hover {
-            transform: translateY(-3px);
-            transition: all 0.3s ease;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-        }
-        .banque-postale-theme {
-            background: linear-gradient(45deg, #FFD700, #FFA500);
-            color: #000;
-        }
-    </style>
 </head>
-<body style="background-color: #f8f9fa;">
-    <nav class="navbar navbar-expand-lg navbar-dark" style="{% block nav_style %}background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);{% endblock %}">
-        <div class="container">
-            <a class="navbar-brand text-dark fw-bold" href="{% url 'accueil' %}">
-                <i class="bi bi-bank"></i> {% block nav_title %}Suite Immobilière Banque Postale{% endblock %}
+<body>
+    {% with page=request.resolver_match.url_name %}
+    <nav class="ti-nav" aria-label="Navigation principale">
+        <div class="container ti-nav-inner">
+            <a class="ti-marque" href="{% url 'accueil' %}">
+                <span class="ti-marque-icone" aria-hidden="true"><i class="bi bi-house-door-fill"></i></span>
+                Mon projet immo
             </a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link text-dark" href="{% url 'biens_financables' %}">
-                    <i class="bi bi-house-check"></i> Biens finançables
-                </a>
-                {% block nav_buttons %}
-                <a class="nav-link text-dark" href="{% url 'upload_releve' %}">
-                    <i class="bi bi-cloud-upload"></i> Analyser un relevé
-                </a>
-                {% endblock %}
+            <div class="ti-liens">
+                <a href="{% url 'depenses_mensuelles' %}" {% if page == 'depenses_mensuelles' %}aria-current="page"{% endif %}>
+                    <i class="bi bi-wallet2" aria-hidden="true"></i><span>Mes dépenses</span></a>
+                <a href="{% url 'simulateur_pret' %}" {% if page == 'simulateur_pret' %}aria-current="page"{% endif %}>
+                    <i class="bi bi-calculator" aria-hidden="true"></i><span>Simulateur</span></a>
+                <a href="{% url 'biens_financables' %}" {% if page == 'biens_financables' %}aria-current="page"{% endif %}>
+                    <i class="bi bi-house-check" aria-hidden="true"></i><span>Biens finançables</span></a>
+                <a href="{% url 'dashboard' %}" {% if page == 'dashboard' %}aria-current="page"{% endif %}>
+                    <i class="bi bi-folder2-open" aria-hidden="true"></i><span>Mon dossier</span></a>
             </div>
         </div>
     </nav>
+    {% endwith %}
 
-    <main>
+    <main class="ti-main">
         {% block content %}{% endblock %}
     </main>
 
-    <footer class="bg-light mt-5 py-4">
-        <div class="container text-center">
-            <p class="text-muted mb-0">
-                © 2024 Suite Immobilière Banque Postale - 
-                <small>Outils professionnels d'analyse financière</small>
-            </p>
+    <footer class="ti-pied">
+        <div class="container">
+            <i class="bi bi-shield-lock" aria-hidden="true"></i>
+            Vos relevés sont lus en mémoire, jamais enregistrés.
         </div>
     </footer>
 

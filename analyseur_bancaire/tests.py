@@ -111,7 +111,7 @@ class SimulateurPreremplissageTests(SimpleTestCase):
         from django.conf import settings
         self.client.cookies[settings.SESSION_COOKIE_NAME] = s.session_key
         r = self.client.get(reverse('simulateur_pret'))
-        self.assertContains(r, 'name="charges_mensuelles" min="0" step="50" value="370"')
+        self.assertContains(r, 'name="charges_mensuelles" min="0" step="1" value="370"')
         self.assertContains(r, 'loyer')
 
 
@@ -176,3 +176,15 @@ class TauxSelonDureeTests(SimpleTestCase):
     def test_page_biens_embarque_le_bareme_par_duree(self):
         r = self.client.get(reverse('biens_financables'))
         self.assertContains(r, 'id="bareme-durees"')
+
+
+class SimulateurChampsTests(SimpleTestCase):
+    def test_mode_mensualites_prend_le_taux_du_bareme(self):
+        r = self.client.get(reverse('simulateur_pret'))
+        taux = f"{TAUX_ACTUELS['regions']['autre']['20']:.2f}"
+        self.assertContains(r, f'name="taux_nominal" min="0" max="10" step="0.01" value="{taux}"')
+
+    def test_montants_saisis_a_l_euro_pres(self):
+        # Un pas de 100 € bloquait l'envoi avec des revenus repris des relevés (5 492 €).
+        r = self.client.get(reverse('simulateur_pret'))
+        self.assertContains(r, 'name="revenus_nets" min="0" step="1"')

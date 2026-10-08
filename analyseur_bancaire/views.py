@@ -84,7 +84,10 @@ def bareme_info(aujourd_hui=None):
     age = ((aujourd_hui or date.today()) - TAUX_DATE).days
     return {'date': TAUX_DATE.strftime('%d/%m/%Y'), 'source': TAUX_SOURCE,
             'perime': age > BAREME_VALIDITE_JOURS, 'age_jours': age,
-            'taux_20': f"{TAUX_ACTUELS['regions']['autre']['20']:.2f}".replace('.', ',')}
+            'taux_20': f"{TAUX_ACTUELS['regions']['autre']['20']:.2f}".replace('.', ','),
+            # Valeurs par défaut des champs de saisie (point décimal, pour <input type="number">)
+            'champ_taux_20': f"{TAUX_ACTUELS['regions']['autre']['20']:.2f}",
+            'champ_assurance': f"{TAUX_ACTUELS['assurance']['30_45']:.2f}"}
 
 
 FRAIS_NOTAIRE = {
@@ -1225,9 +1228,11 @@ def accueil(request):
     calcule quand il existe : l'accueil devient un point de situation, pas une
     simple vitrine."""
     depenses = request.session.get('depenses_mensuelles')
+    capacite = request.session.get('capacite_emprunt')
     return render(request, 'analyseur/accueil.html', {
         'depenses_mensuelles': depenses,
         'depenses_affichees': format_euros(depenses) if depenses else None,
+        'capacite_affichee': format_euros(capacite) if capacite else None,
     })
 
 
