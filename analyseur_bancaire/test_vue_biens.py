@@ -132,7 +132,7 @@ class NavigationTests(SimpleTestCase):
 
     def test_lien_biens_financables_apres_simulation(self):
         r = self.client.get(reverse("simulateur_pret"))
-        self.assertContains(r, "Voir les biens à ta portée")
+        self.assertContains(r, "Voir les biens à ce prix")
 
 
 class VraiesDonneesTests(SimpleTestCase):
