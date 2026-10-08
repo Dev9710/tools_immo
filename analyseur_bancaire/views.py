@@ -1507,11 +1507,24 @@ def _memoriser_saisie(request, data, mode):
     request.session['simulateur_saisie'] = saisie
 
 
-def _oublier_revenus_saisis(session):
-    """De nouveaux relevés font foi pour les revenus et les crédits."""
+def _montant_manuel(saisi, releves):
+    """Vrai si le montant saisi n'est pas simplement celui repris des relevés."""
+    if saisi in (None, ''):
+        return False
+    try:
+        return releves is None or round(float(saisi)) != round(float(releves))
+    except (TypeError, ValueError):
+        return True
+
+
+def _oublier_revenus_saisis(session, ancien_revenus=None, ancien_credits=None):
+    """De nouveaux relevés remplacent les revenus et crédits REPRIS des anciens relevés.
+    Un montant saisi à la main (ex. seul le salaire français, que la banque retient)
+    est gardé : c'est un choix de l'utilisateur, pas une moyenne."""
     saisie = dict(session.get('simulateur_saisie', {}))
-    for k in ('revenus_nets', 'charges_mensuelles'):
-        saisie.pop(k, None)
+    for k, ancien in (('revenus_nets', ancien_revenus), ('charges_mensuelles', ancien_credits)):
+        if not _montant_manuel(saisie.get(k), ancien):
+            saisie.pop(k, None)
     session['simulateur_saisie'] = saisie
 
 
@@ -1628,6 +1641,9 @@ def simulateur_pret(request):
     # l'utilisateur n'a pas a recopier un chiffre que l'outil connait deja.
     return render(request, 'analyseur/simulateur_pret.html', {
         'saisie': request.session.get('simulateur_saisie', {}),
+        'revenus_manuels': _montant_manuel(
+            request.session.get('simulateur_saisie', {}).get('revenus_nets'),
+            request.session.get('revenus_mensuels')),
         'charges_credits': request.session.get('charges_credits'),
         'loyer_actuel': request.session.get('loyer_actuel'),
         'revenus_mensuels': request.session.get('revenus_mensuels'),
@@ -2308,11 +2324,13 @@ def depenses_mensuelles(request):
     # Report vers le simulateur. Les « charges » de l'endettement ne sont que
     # les crédits en cours : toutes les sorties y faisaient passer n'importe
     # quel bien « hors budget ». Les dépenses totales restent pour l'accueil.
+    ancien_revenus = request.session.get('revenus_mensuels')
+    ancien_credits = request.session.get('charges_credits')
     request.session['depenses_mensuelles'] = analyse['resume']['sorties_moyennes']
     request.session['revenus_mensuels'] = analyse['resume']['entrees_moyennes']
     request.session['charges_credits'] = analyse['charges_bancaires']['credits_mensuels']
     request.session['loyer_actuel'] = analyse['charges_bancaires']['loyer_mensuel']
-    _oublier_revenus_saisis(request.session)
+    _oublier_revenus_saisis(request.session, ancien_revenus, ancien_credits)
 
     return render(request, 'analyseur/depenses_mensuelles.html', {
         'analyse': analyse,

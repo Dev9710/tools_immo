@@ -223,13 +223,35 @@ class DossierMemoriseTests(SimpleTestCase):
         page = self.client.get(reverse('simulateur_pret')).content.decode()
         self.assertNotIn('id="primo_accedant" checked', page)
 
-    def test_nouveaux_releves_remplacent_revenus_saisis(self):
+    def test_nouveaux_releves_remplacent_un_montant_repris_des_releves(self):
+        # 5 492 € venait tel quel des anciens relevés : les nouveaux relevés le remplacent.
         from .views import _oublier_revenus_saisis
-        self._simuler()
+        self._simuler(revenus_nets='5492', charges_mensuelles='0')
         s = self.client.session
-        _oublier_revenus_saisis(s)
+        _oublier_revenus_saisis(s, ancien_revenus=5492.11, ancien_credits=0.0)
         self.assertNotIn('revenus_nets', s['simulateur_saisie'])
+        self.assertNotIn('charges_mensuelles', s['simulateur_saisie'])
         self.assertEqual(s['simulateur_saisie']['apport'], '30000')
+
+    def test_montant_saisi_a_la_main_garde_malgre_nouveaux_releves(self):
+        # Revenu retenu par la banque (salaire français seul) : 4 100 € au lieu de 5 492 €.
+        from .views import _oublier_revenus_saisis
+        self._simuler(revenus_nets='4100')
+        s = self.client.session
+        _oublier_revenus_saisis(s, ancien_revenus=5492.11, ancien_credits=0.0)
+        self.assertEqual(s['simulateur_saisie']['revenus_nets'], '4100')
+
+    def test_montant_manuel_signale_avec_celui_des_releves(self):
+        s = self.client.session
+        s['revenus_mensuels'] = 5492.11
+        s['simulateur_saisie'] = {'revenus_nets': '4100'}
+        s.save()
+        from django.conf import settings
+        self.client.cookies[settings.SESSION_COOKIE_NAME] = s.session_key
+        page = self.client.get(reverse('simulateur_pret')).content.decode()
+        self.assertIn('name="revenus_nets" min="0" step="1" value="4100"', page)
+        self.assertIn('saisi par vous', page)
+        self.assertIn('data-releves="5492"', page)
 
     def test_cookie_garde_un_an(self):
         from django.conf import settings

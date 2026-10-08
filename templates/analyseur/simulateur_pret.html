@@ -26,6 +26,7 @@
     .sp-aide { font-size: .8rem; color: var(--mute); margin-top: .35rem; line-height: 1.4; }
     .sp-source { display: inline-flex; align-items: center; gap: .3rem; font-size: .72rem; font-weight: 600; color: var(--ok);
         background: var(--ok-bg); border: 1px solid var(--ok-line); border-radius: 999px; padding: .05rem .5rem; margin-left: .4rem; vertical-align: 1px; }
+    .sp-source.manuel { color: var(--brand); background: var(--brand-soft); border-color: var(--brand-line); }
     .sp-champs .ti-segment { display: flex; width: 100%; }
     .sp-champs .ti-segment label { flex: 1; justify-content: center; padding-left: .3rem; padding-right: .3rem; }
     .sp-memoire { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1rem;
@@ -106,12 +107,16 @@
                     <h2 class="sp-bloc-titre"><span class="sp-num">1</span>Vos revenus et vos crédits</h2>
                     <div class="sp-champs">
                         <div>
-                            <label class="form-label" for="revenus_nets">Revenus nets du foyer{% if revenus_mensuels and not saisie.revenus_nets %}<span class="sp-source"><i class="bi bi-check2" aria-hidden="true"></i>relevés</span>{% endif %}</label>
+                            <label class="form-label" for="revenus_nets">Revenus nets du foyer{% if revenus_manuels %}<span class="sp-source manuel" id="source-revenus"><i class="bi bi-pencil" aria-hidden="true"></i>saisi par vous</span>{% elif revenus_mensuels %}<span class="sp-source" id="source-revenus"><i class="bi bi-check2" aria-hidden="true"></i>relevés</span>{% endif %}</label>
                             <div class="input-group">
-                                <input type="number" class="form-control" id="revenus_nets" name="revenus_nets" min="0" step="1" value="{% if saisie.revenus_nets %}{{ saisie.revenus_nets }}{% else %}{{ revenus_mensuels|default_if_none:''|floatformat:0 }}{% endif %}" inputmode="numeric" required>
+                                <input type="number" class="form-control" id="revenus_nets" name="revenus_nets" min="0" step="1" value="{% if saisie.revenus_nets %}{{ saisie.revenus_nets }}{% else %}{{ revenus_mensuels|default_if_none:''|floatformat:0 }}{% endif %}"{% if revenus_mensuels %} data-releves="{{ revenus_mensuels|floatformat:"0u" }}"{% endif %} inputmode="numeric" required>
                                 <span class="input-group-text">€ / mois</span>
                             </div>
-                            <div class="sp-aide">Salaires nets, avant impôt. Retirez ce qui n'est pas régulier.</div>
+                            <div class="sp-aide">Mettez le revenu que la banque retiendra : salaires nets réguliers, avant impôt.</div>
+                            {% if revenus_mensuels %}<div class="sp-aide" id="aide-releves"{% if not revenus_manuels %} hidden{% endif %}>
+                                Vos relevés indiquent {{ revenus_mensuels|floatformat:"0g" }} €.
+                                <button type="button" class="btn btn-link btn-sm p-0 align-baseline" id="reprendre-releves">Reprendre ce montant</button>
+                            </div>{% endif %}
                         </div>
                         <div>
                             <label class="form-label" for="charges_mensuelles">Crédits en cours{% if charges_credits is not None and not saisie.charges_mensuelles %}<span class="sp-source"><i class="bi bi-check2" aria-hidden="true"></i>relevés</span>{% endif %}</label>
@@ -467,6 +472,28 @@ document.querySelectorAll('input[name="mode"]').forEach(radio => radio.addEventL
     form.addEventListener('change', () => planifierCalcul(0));
     form.addEventListener('submit', e => { e.preventDefault(); planifierCalcul(0); });
 });
+
+// Revenus : saisis à la main (ex. seul le salaire que la banque retient) ou repris des relevés.
+(() => {
+    const champ = document.getElementById('revenus_nets');
+    const releves = champ.dataset.releves;
+    const source = document.getElementById('source-revenus');
+    const aide = document.getElementById('aide-releves');
+    if (!releves || !source) return;
+    const actualiser = () => {
+        const manuel = champ.value !== '' && Math.round(Number(champ.value)) !== Number(releves);
+        source.className = 'sp-source' + (manuel ? ' manuel' : '');
+        source.innerHTML = manuel ? '<i class="bi bi-pencil" aria-hidden="true"></i>saisi par vous'
+                                  : '<i class="bi bi-check2" aria-hidden="true"></i>relevés';
+        if (aide) aide.hidden = !manuel;
+    };
+    champ.addEventListener('input', actualiser);
+    document.getElementById('reprendre-releves')?.addEventListener('click', () => {
+        champ.value = releves;
+        champ.dispatchEvent(new Event('input', { bubbles: true }));
+        champ.focus();
+    });
+})();
 
 // Revenus déjà repris des relevés : le résultat est là dès l'arrivée sur la page.
 planifierCalcul(0);
