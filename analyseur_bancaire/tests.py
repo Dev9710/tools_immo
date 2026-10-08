@@ -211,7 +211,7 @@ class DossierMemoriseTests(SimpleTestCase):
                         'name="apport" min="0" step="1" value="30000"',
                         'id="duree-25" value="25" checked',
                         'id="type-neuf" value="neuf" checked',
-                        'id="adultes-1" value="1" checked',
+                        'id="situation-seul" value="seul" checked',
                         'value="ile_de_france" selected', 'value="bon" selected', 'value="2" selected',
                         'name="age" min="18" max="70" value="41"',
                         'id="primo_accedant" checked'):
@@ -300,3 +300,46 @@ class AnneeDuReleveTests(SimpleTestCase):
         annee_de = BanquePostaleParserSimple().build_year_resolver(
             "Relevé édité le 12 septembre 2025")
         self.assertEqual((annee_de(8), annee_de(9)), (2025, 2025))
+
+
+class SituationFoyerTests(SimpleTestCase):
+    """Seul(e) / en couple avec un revenu / en couple avec deux revenus (08/10/2026)."""
+
+    def _post(self, **champs):
+        data = {'mode': 'capacite', 'revenus_nets': '4100', 'charges_mensuelles': '0', 'duree': '20',
+                'region': 'autre', 'profil': 'moyen', 'age': '35', 'nb_enfants': '0', 'apport': '0',
+                'type_bien': 'ancien'}
+        data.update(champs)
+        r = self.client.post(reverse('simulateur_pret'), json.dumps(data), content_type='application/json')
+        self.assertTrue(r.json()['success'], r.json())
+        return r.json()['data']
+
+    def test_deux_revenus_additionnes(self):
+        d = self._post(situation='couple_deux', revenus_conjoint='2500')
+        self.assertEqual(d['revenus_total'], 6600)
+        self.assertEqual(self.client.session['revenus_nets'], 6600)
+        self.assertEqual(self.client.session['nb_adultes'], 2)
+
+    def test_deux_revenus_empruntent_plus_qu_un_seul(self):
+        un = self._post(situation='couple_un', revenus_conjoint='2500')['capacite_emprunt']
+        deux = self._post(situation='couple_deux', revenus_conjoint='2500')['capacite_emprunt']
+        self.assertGreater(deux, un)
+
+    def test_couple_un_revenu_ignore_le_second_et_compte_deux_adultes(self):
+        d = self._post(situation='couple_un', revenus_conjoint='2500')
+        self.assertEqual(d['revenus_total'], 4100)
+        self.assertEqual(self.client.session['nb_adultes'], 2)
+
+    def test_seul_compte_un_adulte(self):
+        self._post(situation='seul')
+        self.assertEqual(self.client.session['nb_adultes'], 1)
+
+    def test_situation_et_second_revenu_retrouves(self):
+        self._post(situation='couple_deux', revenus_conjoint='2500')
+        page = self.client.get(reverse('simulateur_pret')).content.decode()
+        self.assertIn('id="situation-couple_deux" value="couple_deux" checked', page)
+        self.assertIn('name="revenus_conjoint" min="0" step="1" value="2500"', page)
+
+    def test_minimum_de_reste_a_vivre_suit_le_foyer(self):
+        self.assertEqual(self._post(situation='seul')['reste_minimum'], 400)
+        self.assertEqual(self._post(situation='couple_un', nb_enfants='2')['reste_minimum'], 1400)

@@ -26,6 +26,9 @@
     .sp-aide { font-size: .8rem; color: var(--mute); margin-top: .35rem; line-height: 1.4; }
     .sp-source { display: inline-flex; align-items: center; gap: .3rem; font-size: .72rem; font-weight: 600; color: var(--ok);
         background: var(--ok-bg); border: 1px solid var(--ok-line); border-radius: 999px; padding: .05rem .5rem; margin-left: .4rem; vertical-align: 1px; }
+    .sp-total { font-size: .9rem; color: var(--ink-2); background: var(--brand-soft); border: 1px solid var(--brand-line);
+        border-radius: 10px; padding: .55rem .8rem; }
+    .sp-total strong { color: var(--brand); font-variant-numeric: tabular-nums; }
     .sp-source.manuel { color: var(--brand); background: var(--brand-soft); border-color: var(--brand-line); }
     .sp-champs .ti-segment { display: flex; width: 100%; }
     .sp-champs .ti-segment label { flex: 1; justify-content: center; padding-left: .3rem; padding-right: .3rem; }
@@ -47,6 +50,7 @@
     .sp-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
     .sp-stat { border: 1px solid var(--hair); border-radius: 12px; padding: .7rem .85rem; background: var(--soft); }
     .sp-stat .k { font-size: .75rem; color: var(--mute); font-weight: 500; }
+    .sp-stat-note { font-size: .72rem; color: var(--mute); margin-top: .15rem; }
     .sp-stat .v { font-size: 1.15rem; font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .sp-jauge { position: relative; height: 5px; border-radius: 999px; background: #e3e6ee; margin-top: .45rem; }
     .sp-jauge span { position: absolute; inset: 0 auto 0 0; width: calc(min(var(--p), 50) * 2%); border-radius: 999px; background: var(--ok-dot); }
@@ -114,10 +118,19 @@
             <form id="capaciteForm"{% if saisie.mode == 'mensualite' %} class="d-none"{% endif %} novalidate>
                 {% csrf_token %}
                 <div class="sp-bloc">
-                    <h2 class="sp-bloc-titre"><span class="sp-num">1</span>Vos revenus et vos crédits</h2>
+                    <h2 class="sp-bloc-titre"><span class="sp-num">1</span>Votre foyer et vos revenus</h2>
+                    {% with sit=saisie.situation|default:situation_defaut %}
                     <div class="sp-champs">
+                        <div class="plein">
+                            <span class="form-label d-block" id="lib-situation">Vous empruntez</span>
+                            <div class="ti-segment" role="group" aria-labelledby="lib-situation">
+                                <input type="radio" class="btn-check" name="situation" id="situation-seul" value="seul"{% if sit == 'seul' %} checked{% endif %}><label for="situation-seul">Seul(e)</label>
+                                <input type="radio" class="btn-check" name="situation" id="situation-couple_un" value="couple_un"{% if sit == 'couple_un' %} checked{% endif %}><label for="situation-couple_un">En couple, 1 revenu</label>
+                                <input type="radio" class="btn-check" name="situation" id="situation-couple_deux" value="couple_deux"{% if sit == 'couple_deux' %} checked{% endif %}><label for="situation-couple_deux">En couple, 2 revenus</label>
+                            </div>
+                        </div>
                         <div>
-                            <label class="form-label" for="revenus_nets">Revenus nets du foyer{% if revenus_manuels %}<span class="sp-source manuel" id="source-revenus"><i class="bi bi-pencil" aria-hidden="true"></i>saisi par vous</span>{% elif revenus_mensuels %}<span class="sp-source" id="source-revenus"><i class="bi bi-check2" aria-hidden="true"></i>calcul automatique</span>{% endif %}</label>
+                            <label class="form-label" for="revenus_nets"><span id="lib-revenus">{% if sit == 'seul' %}Vos revenus nets{% elif sit == 'couple_deux' %}Revenus nets · emprunteur 1{% else %}Revenus nets du foyer{% endif %}</span>{% if revenus_manuels %}<span class="sp-source manuel" id="source-revenus"><i class="bi bi-pencil" aria-hidden="true"></i>saisi par vous</span>{% elif revenus_mensuels %}<span class="sp-source" id="source-revenus"><i class="bi bi-check2" aria-hidden="true"></i>calcul automatique</span>{% endif %}</label>
                             <div class="input-group">
                                 <input type="number" class="form-control" id="revenus_nets" name="revenus_nets" min="0" step="1" value="{% if saisie.revenus_nets %}{{ saisie.revenus_nets }}{% else %}{{ revenus_mensuels|default_if_none:''|floatformat:0 }}{% endif %}"{% if revenus_mensuels %} data-releves="{{ revenus_mensuels|floatformat:"0u" }}"{% endif %} inputmode="numeric" required>
                                 <span class="input-group-text">€ / mois</span>
@@ -130,6 +143,17 @@
                             </div>
                             {% else %}<div class="sp-aide">Salaires nets réguliers, avant impôt : le revenu que la banque retiendra.</div>{% endif %}
                         </div>
+                        <div id="champ-conjoint"{% if sit != 'couple_deux' %} hidden{% endif %}>
+                            <label class="form-label" for="revenus_conjoint">Revenus nets · emprunteur 2</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="revenus_conjoint" name="revenus_conjoint" min="0" step="1" value="{{ saisie.revenus_conjoint|default:'' }}" inputmode="numeric" placeholder="0">
+                                <span class="input-group-text">€ / mois</span>
+                            </div>
+                            <div class="sp-aide">Salaire net de votre co-emprunteur. Laissez 0 s'il arrive déjà sur le compte de vos relevés.</div>
+                        </div>
+                        <div class="plein sp-total" id="total-foyer"{% if sit != 'couple_deux' %} hidden{% endif %}>
+                            Revenus du foyer retenus : <strong id="total-foyer-v">–</strong>
+                        </div>
                         <div>
                             <label class="form-label" for="charges_mensuelles">Crédits en cours{% if charges_credits is not None and not saisie.charges_mensuelles %}<span class="sp-source"><i class="bi bi-check2" aria-hidden="true"></i>relevés</span>{% endif %}</label>
                             <div class="input-group">
@@ -138,7 +162,18 @@
                             </div>
                             <div class="sp-aide">Crédits et pensions versées seulement. Aucun ? Laissez 0.{% if loyer_actuel %} Votre loyer (≈ {{ loyer_actuel|floatformat:0 }} €) n'en fait pas partie.{% endif %}</div>
                         </div>
+                        <div>
+                            <label class="form-label" for="nb_enfants">Enfants à charge</label>
+                            <select class="form-select" id="nb_enfants" name="nb_enfants">
+                                <option value="0"{% if saisie.nb_enfants|default:'0' == '0' %} selected{% endif %}>Aucun</option>
+                                <option value="1"{% if saisie.nb_enfants|default:'0' == '1' %} selected{% endif %}>1</option>
+                                <option value="2"{% if saisie.nb_enfants|default:'0' == '2' %} selected{% endif %}>2</option>
+                                <option value="3"{% if saisie.nb_enfants|default:'0' == '3' %} selected{% endif %}>3</option>
+                                <option value="4"{% if saisie.nb_enfants|default:'0' == '4' %} selected{% endif %}>4 ou plus</option>
+                            </select>
+                        </div>
                     </div>
+                    {% endwith %}
                 </div>
 
                 <div class="sp-bloc">
@@ -211,28 +246,6 @@
                     </div>
                 </div>
 
-                <div class="sp-bloc">
-                    <h2 class="sp-bloc-titre"><span class="sp-num">4</span>Votre foyer</h2>
-                    <div class="sp-champs">
-                        <div>
-                            <span class="form-label d-block" id="lib-adultes">Adultes</span>
-                            <div class="ti-segment" role="group" aria-labelledby="lib-adultes">
-                                <input type="radio" class="btn-check" name="nb_adultes" id="adultes-1" value="1"{% if saisie.nb_adultes == '1' %} checked{% endif %}><label for="adultes-1">1</label>
-                                <input type="radio" class="btn-check" name="nb_adultes" id="adultes-2" value="2"{% if saisie.nb_adultes != '1' %} checked{% endif %}><label for="adultes-2">2</label>
-                            </div>
-                        </div>
-                        <div>
-                            <label class="form-label" for="nb_enfants">Enfants</label>
-                            <select class="form-select" id="nb_enfants" name="nb_enfants">
-                                <option value="0"{% if saisie.nb_enfants|default:'0' == '0' %} selected{% endif %}>Aucun</option>
-                                <option value="1"{% if saisie.nb_enfants|default:'0' == '1' %} selected{% endif %}>1</option>
-                                <option value="2"{% if saisie.nb_enfants|default:'0' == '2' %} selected{% endif %}>2</option>
-                                <option value="3"{% if saisie.nb_enfants|default:'0' == '3' %} selected{% endif %}>3</option>
-                                <option value="4"{% if saisie.nb_enfants|default:'0' == '4' %} selected{% endif %}>4 ou plus</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
 
                 <div class="sp-pied">
                     {% include "analyseur/_bareme.html" %}
@@ -417,7 +430,7 @@ function sautDeCharge(mensualite) {
 }
 
 function afficherCapacite(d, saisie) {
-    const revenus = Number(saisie.revenus_nets) || 0;
+    const revenus = d.revenus_total || Number(saisie.revenus_nets) || 0;
     const endettement = revenus ? (Number(saisie.charges_mensuelles || 0) + d.mensualite_max) / revenus * 100 : 0;
     const niveau = endettement > 35.5 ? 'hors' : endettement > 33 ? 'limite' : 'ok';
     const alerte = d.alerte_reste_vivre;
@@ -433,7 +446,8 @@ function afficherCapacite(d, saisie) {
                 <div class="sp-jauge" data-niveau="${niveau}" style="--p: ${Math.round(endettement)}" title="Le trait marque le seuil des 35 %"><span></span></div></div>
             <div class="sp-stat"><div class="k">Montant emprunté</div><div class="v">${eur(d.capacite_emprunt)}</div></div>
             <div class="sp-stat"><div class="k">Reste à vivre</div>
-                <div class="v ${alerte ? (alerte.type === 'danger' ? 'text-danger' : 'text-warning') : 'text-success'}">${eur(d.reste_a_vivre)}</div></div>
+                <div class="v ${alerte ? (alerte.type === 'danger' ? 'text-danger' : 'text-warning') : 'text-success'}">${eur(d.reste_a_vivre)}</div>
+                <div class="sp-stat-note">minimum pour votre foyer : ${eur(d.reste_minimum)}</div></div>
         </div>
         <div class="sp-taux mt-2" aria-label="Taux de votre prêt">
             <div><span class="k">Taux du prêt</span><span class="v">${taux(d.taux_nominal)}</span></div>
@@ -530,6 +544,24 @@ document.querySelectorAll('input[name="mode"]').forEach(radio => radio.addEventL
         champ.dispatchEvent(new Event('input', { bubbles: true }));
         champ.focus();
     });
+})();
+
+// Situation du foyer : libellé du 1er revenu, 2e revenu et total seulement à deux revenus.
+(() => {
+    const form = document.getElementById('capaciteForm');
+    const libelles = { seul: 'Vos revenus nets', couple_un: 'Revenus nets du foyer', couple_deux: 'Revenus nets · emprunteur 1' };
+    const majFoyer = () => {
+        const sit = form.querySelector('input[name="situation"]:checked')?.value || 'couple_un';
+        const deux = sit === 'couple_deux';
+        document.getElementById('lib-revenus').textContent = libelles[sit];
+        document.getElementById('champ-conjoint').hidden = !deux;
+        document.getElementById('total-foyer').hidden = !deux;
+        const total = (Number(form.revenus_nets.value) || 0) + (deux ? Number(form.revenus_conjoint.value) || 0 : 0);
+        document.getElementById('total-foyer-v').textContent = eur(total) + ' / mois';
+    };
+    form.addEventListener('input', majFoyer);
+    form.addEventListener('change', majFoyer);
+    majFoyer();
 })();
 
 // Revenus déjà repris des relevés : le résultat est là dès l'arrivée sur la page.

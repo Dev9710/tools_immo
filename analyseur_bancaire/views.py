@@ -1490,9 +1490,11 @@ def render_selection_interface_with_month(prelevements, achats_cb, mois_disponib
 # Réponses du simulateur gardées dans le navigateur (session en cookie signé, 1 an),
 # pour les retrouver à la visite suivante. Les taux n'en font pas partie : ils
 # viennent toujours du barème du jour.
-SAISIE_SIMULATEUR = ('revenus_nets', 'charges_mensuelles', 'apport', 'type_bien',
-                     'primo_accedant', 'duree', 'region', 'profil', 'nb_adultes',
+SAISIE_SIMULATEUR = ('situation', 'revenus_nets', 'revenus_conjoint', 'charges_mensuelles',
+                     'apport', 'type_bien', 'primo_accedant', 'duree', 'region', 'profil',
                      'nb_enfants', 'age')
+# Situation du foyer : nombre d'adultes à faire vivre, et si un 2e salaire compte.
+SITUATIONS = {'seul': 1, 'couple_un': 2, 'couple_deux': 2}
 
 
 def _memoriser_saisie(request, data, mode):
@@ -1550,13 +1552,23 @@ def simulateur_pret(request):
 
             if mode == 'capacite':
                 # Mode calcul de capacité d'emprunt
-                revenus = float(data.get('revenus_nets', 0))
+                # Seul(e), en couple avec 1 revenu, ou avec 2 revenus : le 2e salaire ne
+                # compte qu'en « couple_deux » ; les adultes à faire vivre suivent la situation.
+                situation = data.get('situation')
+                if situation not in SITUATIONS:      # ancienne saisie : déduite du nombre d'adultes
+                    situation = 'seul' if str(data.get('nb_adultes', 2)) == '1' else 'couple_un'
+                    data = dict(data.items()) if not isinstance(data, dict) else data
+                    data['situation'] = situation    # mémorisée telle que déduite
+                revenus_principal = float(data.get('revenus_nets', 0) or 0)
+                revenus_conjoint = (float(data.get('revenus_conjoint', 0) or 0)
+                                    if situation == 'couple_deux' else 0.0)
+                revenus = revenus_principal + revenus_conjoint
                 charges = float(data.get('charges_mensuelles', 0))
                 duree = int(data.get('duree', 20))
                 region = data.get('region', 'autre')
                 profil = data.get('profil', 'moyen')
                 age = int(data.get('age', 35))
-                nb_adultes = int(data.get('nb_adultes', 2))
+                nb_adultes = SITUATIONS[situation]
                 nb_enfants = int(data.get('nb_enfants', 0))
 
                 if revenus <= 0:
@@ -1602,11 +1614,13 @@ def simulateur_pret(request):
                 request.session.pop('profil_biens', None)
 
                 resultat.update({
+                    'revenus_total': round(revenus),
                     'prix_achat_max': round(prix_max, 2),
                     'apport': apport,
                     'frais_notaire': frais_notaire,
                     'budget_total': round(prix_max + frais_notaire, 2),
                     'reste_a_vivre': reste_vivre_data['reste_a_vivre'],
+                    'reste_minimum': reste_vivre_data['minimum_requis'],
                     'alerte_reste_vivre': reste_vivre_data['alerte'],
                     'statut_dossier': calculer_statut_dossier(request.session)
                 })
@@ -1641,6 +1655,9 @@ def simulateur_pret(request):
     # l'utilisateur n'a pas a recopier un chiffre que l'outil connait deja.
     return render(request, 'analyseur/simulateur_pret.html', {
         'saisie': request.session.get('simulateur_saisie', {}),
+        # Dossier enregistré avant le choix de situation : on la déduit du nombre d'adultes.
+        'situation_defaut': 'seul' if str(request.session.get('simulateur_saisie', {}).get('nb_adultes')) == '1'
+                            else 'couple_un',
         'revenus_manuels': _montant_manuel(
             request.session.get('simulateur_saisie', {}).get('revenus_nets'),
             request.session.get('revenus_mensuels')),
