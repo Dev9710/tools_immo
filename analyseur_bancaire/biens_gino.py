@@ -69,12 +69,25 @@ def _nom_ville(slug):
     return "-".join(m if (i and m in PETITS_MOTS) else m.capitalize() for i, m in enumerate(mots))
 
 
+def _nom_ville_stan(dossier):
+    """Nom accentué de la ville (« Créteil »), lu dans les adresses de Stan
+    (« …, 94000 Créteil ») dont le nom correspond au dossier ; None sinon."""
+    try:
+        data = json.loads((dossier / "_stan.json").read_text(encoding="utf-8"))
+        adresses = [a.get("adresse") or "" for a in data if isinstance(a, dict)]
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
+    noms = [m.group(1) for m in (re.search(r"\b\d{5}\s+(.+?)\s*$", str(a)) for a in adresses)
+            if m and _slug(m.group(1)) == dossier.name]
+    return max(set(noms), key=noms.count) if noms else None
+
+
 def villes(racine):
     """Villes relevées par Gino, ou None si le dossier racine n'existe pas."""
     racine = Path(racine)
     if not racine.is_dir():
         return None
-    return [{"slug": d.name, "nom": _nom_ville(d.name)}
+    return [{"slug": d.name, "nom": _nom_ville_stan(d) or _nom_ville(d.name)}
             for d in sorted(p for p in racine.iterdir() if p.is_dir())
             if any(d.glob("_gino_*.json"))]
 
