@@ -75,14 +75,19 @@
   /* Profil */
   .bf details.profil > summary { list-style: none; cursor: pointer; }
   .bf details.profil > summary::-webkit-details-marker { display: none; }
-  .bf .profil-titre { display: flex; align-items: center; gap: .6rem; font-weight: 600; }
+  .bf .profil-entete { display: flex; flex-direction: column; gap: .9rem; }
+  .bf .profil-haut { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
+  .bf .profil-titre { display: flex; align-items: center; gap: .6rem; font-weight: 600; flex-wrap: wrap; }
   .bf .icone-carre { display: inline-grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 10px;
     background: var(--brand-soft); color: var(--brand); font-size: 1.05rem; flex: none; }
-  .bf .resume-profil { display: flex; flex-wrap: wrap; gap: .5rem 0; flex: 1 1 30rem; min-width: 0; }
-  .bf .kv { display: flex; flex-direction: column; padding: 0 1.1rem; border-left: 1px solid var(--hair); }
-  .bf .kv:first-child { border-left: 0; padding-left: 0; }
+  /* Résumé du profil : 6 cases identiques, 6 / 3 / 2 colonnes selon la largeur, jamais de case orpheline */
+  .bf .resume-profil { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .6rem; }
+  @media (max-width: 1199.98px) { .bf .resume-profil { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .bf .kv { display: flex; flex-direction: column; gap: .15rem; min-width: 0; padding: .6rem .8rem;
+    background: var(--soft); border: 1px solid var(--hair); border-radius: 12px; }
   .bf .kv .k { font-size: .72rem; font-weight: 500; color: var(--mute); }
-  .bf .kv .v { font-size: .95rem; font-weight: 600; }
+  .bf .kv .v { font-size: 1rem; font-weight: 650; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bf .kv .v small { font-size: .75em; font-weight: 500; color: var(--mute); }
   .bf .source { font-size: .75rem; font-weight: 600; border-radius: 999px; padding: .2rem .6rem; border: 1px solid; }
   .bf .source-simulation { color: var(--ok); background: var(--ok-bg); border-color: var(--ok-line); }
   .bf .source-saisie { color: var(--brand); background: var(--brand-soft); border-color: #c7d2fe; }
@@ -186,8 +191,7 @@
     .bf .seg { gap: .4rem; }
     .bf .seg button { padding: .6rem .6rem; }
     .bf .seg .lib { font-size: .72rem; gap: .3rem; white-space: nowrap; }
-    .bf .resume-profil { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem 1rem; }
-    .bf .resume-profil .kv { border-left: 0; padding: 0; }
+    .bf .resume-profil { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .bf .seg .n { font-size: 1.4rem; }
     .bf .seg .pct { display: none; }
     .bf .kv { padding: 0 .8rem; }
@@ -303,23 +307,22 @@
 
   {# ---------- 2. Le profil, replié en une ligne ---------- #}
   <details class="profil carte-blanche mb-3 apparait apparait-3" {% if profil.revenus <= 0 or taux_actualise or source_profil == 'defaut' %}open{% endif %}>
-    <summary class="px-3 px-lg-4 py-3 d-flex flex-wrap justify-content-between align-items-center gap-3">
-      <span class="d-flex flex-wrap align-items-center gap-3" style="flex: 1 1 30rem; min-width: 0;">
-        <span class="profil-titre"><span class="icone-carre" aria-hidden="true"><i class="bi bi-person"></i></span>Votre profil</span>
-        <span class="resume-profil">
-          <span class="kv"><span class="k">Revenus</span><span class="v num">{{ profil.revenus|floatformat:0|intcomma }} €/mois</span></span>
-          <span class="kv"><span class="k">Charges</span><span class="v num">{{ profil.charges|floatformat:0|intcomma }} €</span></span>
-          <span class="kv"><span class="k">Apport</span><span class="v num">{{ profil.apport|floatformat:0|intcomma }} €</span></span>
-          <span class="kv"><span class="k">Durée</span><span class="v num">{{ profil.duree }} ans</span></span>
-          <span class="kv"><span class="k">Taux + assurance</span><span class="v num">{{ profil.taux_nominal|floatformat:2 }} % + {{ profil.taux_assurance|floatformat:2 }} %</span></span>
-          {% if profil.primo %}<span class="kv"><span class="k">Statut</span><span class="v">Primo-accédant</span></span>{% endif %}
+    <summary class="profil-entete px-3 px-lg-4 py-3">
+      <span class="profil-haut">
+        <span class="profil-titre"><span class="icone-carre" aria-hidden="true"><i class="bi bi-person"></i></span>Votre profil
+          {% if source_profil == 'simulation' %}<span class="source source-simulation">repris de votre simulation</span>
+          {% elif source_profil == 'saisie' %}<span class="source source-saisie">votre saisie</span>
+          {% else %}<span class="source source-defaut">valeurs par défaut, à ajuster</span>{% endif %}
         </span>
-      </span>
-      <span class="d-flex align-items-center gap-2">
-        {% if source_profil == 'simulation' %}<span class="source source-simulation">repris de votre simulation</span>
-        {% elif source_profil == 'saisie' %}<span class="source source-saisie">votre saisie</span>
-        {% else %}<span class="source source-defaut">valeurs par défaut, à ajuster</span>{% endif %}
         <span class="bouton-modifier"><span class="ouvrir"><i class="bi bi-pencil" aria-hidden="true"></i> Modifier mon profil</span><span class="fermer"><i class="bi bi-chevron-up" aria-hidden="true"></i> Replier</span></span>
+      </span>
+      <span class="resume-profil">
+        <span class="kv"><span class="k">Revenus</span><span class="v num">{{ profil.revenus|floatformat:0|intcomma }} <small>€/mois</small></span></span>
+        <span class="kv"><span class="k">Charges</span><span class="v num">{{ profil.charges|floatformat:0|intcomma }} <small>€/mois</small></span></span>
+        <span class="kv"><span class="k">Apport</span><span class="v num">{{ profil.apport|floatformat:0|intcomma }} <small>€</small></span></span>
+        <span class="kv"><span class="k">Durée</span><span class="v num">{{ profil.duree }} <small>ans</small></span></span>
+        <span class="kv"><span class="k">Taux + assurance</span><span class="v num">{{ profil.taux_nominal|floatformat:2 }} % <small>+ {{ profil.taux_assurance|floatformat:2 }} %</small></span></span>
+        <span class="kv"><span class="k">Premier achat</span><span class="v">{% if profil.primo %}Oui <small>primo-accédant</small>{% else %}Non{% endif %}</span></span>
       </span>
     </summary>
     <div class="px-3 px-lg-4 pt-3 pb-4">
