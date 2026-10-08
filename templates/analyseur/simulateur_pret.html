@@ -107,16 +107,18 @@
                     <h2 class="sp-bloc-titre"><span class="sp-num">1</span>Vos revenus et vos crédits</h2>
                     <div class="sp-champs">
                         <div>
-                            <label class="form-label" for="revenus_nets">Revenus nets du foyer{% if revenus_manuels %}<span class="sp-source manuel" id="source-revenus"><i class="bi bi-pencil" aria-hidden="true"></i>saisi par vous</span>{% elif revenus_mensuels %}<span class="sp-source" id="source-revenus"><i class="bi bi-check2" aria-hidden="true"></i>relevés</span>{% endif %}</label>
+                            <label class="form-label" for="revenus_nets">Revenus nets du foyer{% if revenus_manuels %}<span class="sp-source manuel" id="source-revenus"><i class="bi bi-pencil" aria-hidden="true"></i>saisi par vous</span>{% elif revenus_mensuels %}<span class="sp-source" id="source-revenus"><i class="bi bi-check2" aria-hidden="true"></i>calcul automatique</span>{% endif %}</label>
                             <div class="input-group">
                                 <input type="number" class="form-control" id="revenus_nets" name="revenus_nets" min="0" step="1" value="{% if saisie.revenus_nets %}{{ saisie.revenus_nets }}{% else %}{{ revenus_mensuels|default_if_none:''|floatformat:0 }}{% endif %}"{% if revenus_mensuels %} data-releves="{{ revenus_mensuels|floatformat:"0u" }}"{% endif %} inputmode="numeric" required>
                                 <span class="input-group-text">€ / mois</span>
                             </div>
-                            <div class="sp-aide">Mettez le revenu que la banque retiendra : salaires nets réguliers, avant impôt.</div>
-                            {% if revenus_mensuels %}<div class="sp-aide" id="aide-releves"{% if not revenus_manuels %} hidden{% endif %}>
-                                Vos relevés indiquent {{ revenus_mensuels|floatformat:"0g" }} €.
-                                <button type="button" class="btn btn-link btn-sm p-0 align-baseline" id="reprendre-releves">Reprendre ce montant</button>
-                            </div>{% endif %}
+                            {% if revenus_mensuels %}
+                            <div class="sp-aide" id="aide-auto"{% if revenus_manuels %} hidden{% endif %}>Moyenne des entrées de vos relevés. Si la banque ne retient qu'une partie de vos revenus, saisissez ce montant.</div>
+                            <div class="sp-aide" id="aide-releves"{% if not revenus_manuels %} hidden{% endif %}>
+                                Calcul automatique : {{ revenus_mensuels|floatformat:"0g" }} €.
+                                <button type="button" class="btn btn-link btn-sm p-0 align-baseline" id="reprendre-releves">Revenir au calcul automatique</button>
+                            </div>
+                            {% else %}<div class="sp-aide">Salaires nets réguliers, avant impôt : le revenu que la banque retiendra.</div>{% endif %}
                         </div>
                         <div>
                             <label class="form-label" for="charges_mensuelles">Crédits en cours{% if charges_credits is not None and not saisie.charges_mensuelles %}<span class="sp-source"><i class="bi bi-check2" aria-hidden="true"></i>relevés</span>{% endif %}</label>
@@ -479,13 +481,15 @@ document.querySelectorAll('input[name="mode"]').forEach(radio => radio.addEventL
     const releves = champ.dataset.releves;
     const source = document.getElementById('source-revenus');
     const aide = document.getElementById('aide-releves');
+    const aideAuto = document.getElementById('aide-auto');
     if (!releves || !source) return;
     const actualiser = () => {
         const manuel = champ.value !== '' && Math.round(Number(champ.value)) !== Number(releves);
         source.className = 'sp-source' + (manuel ? ' manuel' : '');
         source.innerHTML = manuel ? '<i class="bi bi-pencil" aria-hidden="true"></i>saisi par vous'
-                                  : '<i class="bi bi-check2" aria-hidden="true"></i>relevés';
+                                  : '<i class="bi bi-check2" aria-hidden="true"></i>calcul automatique';
         if (aide) aide.hidden = !manuel;
+        if (aideAuto) aideAuto.hidden = manuel;
     };
     champ.addEventListener('input', actualiser);
     document.getElementById('reprendre-releves')?.addEventListener('click', () => {
