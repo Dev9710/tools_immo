@@ -211,6 +211,16 @@ class DemarrageTests(SimpleTestCase):
         self.assertEqual(popen.call_args[0][0], [str(self.python), '-u', 'veille.py', '--ville', 'ville'])
         self.assertEqual(pause.call_count, 2)
 
+    def test_lance_sans_fenetre(self):
+        # Une fenêtre noire s'ouvrait au clic ; la fermer tuait le contrôle. Console invisible
+        # (CREATE_NO_WINDOW) au lieu de DETACHED_PROCESS, que le lanceur du venv contournait.
+        popen = mock.MagicMock()
+        with mock.patch('analyseur_bancaire.views.biens_gino.veille_en_cours', return_value=True):
+            self._lancer(popen)
+        drapeaux = popen.call_args.kwargs['creationflags']
+        self.assertTrue(drapeaux & 0x08000000)          # CREATE_NO_WINDOW
+        self.assertFalse(drapeaux & 0x00000008)         # pas DETACHED_PROCESS
+
     def test_verrou_jamais_vu_rend_la_main(self):
         popen = mock.MagicMock()
         with mock.patch('analyseur_bancaire.views.biens_gino.veille_en_cours',

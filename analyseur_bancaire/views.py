@@ -2679,7 +2679,11 @@ def _demarrer_veille(racine, slug):
     python = Path(settings.AGENCE_IMMO_PYTHON)
     if not python.is_file() or not (racine / 'veille.py').is_file():
         return False
-    drapeaux = (getattr(subprocess, 'DETACHED_PROCESS', 0)
+    # Console invisible, pas « détachée » : le Python du venv n'est qu'un lanceur qui démarre
+    # le vrai Python ; détaché, celui-ci réclamait une console et ouvrait une fenêtre noire
+    # dont la fermeture tuait le contrôle. CREATE_NO_WINDOW donne une console sans fenêtre,
+    # héritée par le vrai Python.
+    drapeaux = (getattr(subprocess, 'CREATE_NO_WINDOW', 0)
                 | getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0))
     try:
         with open(racine / slug / '_veille.log', 'w', encoding='utf-8') as journal:
