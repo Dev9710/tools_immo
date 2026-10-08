@@ -241,3 +241,23 @@ class DossierMemoriseTests(SimpleTestCase):
         self.assertRedirects(r, reverse('accueil'))
         self.assertNotIn('simulateur_saisie', self.client.session)
         self.assertNotIn('capacite_emprunt', self.client.session)
+
+
+class AccueilParcoursTests(SimpleTestCase):
+    def test_premiere_visite_commence_par_l_etape_1(self):
+        r = self.client.get(reverse('accueil'))
+        self.assertEqual(r.context['prochaine_etape'], 1)
+        self.assertContains(r, "Commencez par l'étape 1")
+
+    def test_apres_simulation_affiche_le_prix_maximum(self):
+        s = self.client.session
+        s['depenses_mensuelles'] = 3000.0
+        s['revenus_mensuels'] = 4000.0
+        s.save()
+        from django.conf import settings
+        self.client.cookies[settings.SESSION_COOKIE_NAME] = s.session_key
+        self.client.post(reverse('simulateur_pret'), json.dumps({'mode': 'capacite', 'revenus_nets': '4000'}),
+                         content_type='application/json')
+        r = self.client.get(reverse('accueil'))
+        self.assertEqual(r.context['prochaine_etape'], 3)
+        self.assertContains(r, '€ prix maximum')

@@ -1229,10 +1229,16 @@ def accueil(request):
     simple vitrine."""
     depenses = request.session.get('depenses_mensuelles')
     capacite = request.session.get('capacite_emprunt')
+    prix_max = request.session.get('prix_achat_max')
+    revenus = request.session.get('revenus_mensuels')
     return render(request, 'analyseur/accueil.html', {
+        'revenus_affiches': format_euros(revenus) if revenus else None,
         'depenses_mensuelles': depenses,
         'depenses_affichees': format_euros(depenses) if depenses else None,
         'capacite_affichee': format_euros(capacite) if capacite else None,
+        'prix_max_affiche': format_euros(prix_max) if prix_max else None,
+        # L'étape à faire maintenant : la première pas encore faite.
+        'prochaine_etape': 1 if not depenses else (2 if not capacite else 3),
     })
 
 
@@ -1569,6 +1575,7 @@ def simulateur_pret(request):
                 request.session['revenus_nets'] = revenus
                 request.session['charges_fixes'] = charges
                 request.session['capacite_emprunt'] = resultat['capacite_emprunt']
+                request.session['prix_achat_max'] = round(prix_max)
                 request.session['mensualite_max'] = resultat['mensualite_max']
                 request.session['apport'] = apport
                 request.session['duree'] = duree

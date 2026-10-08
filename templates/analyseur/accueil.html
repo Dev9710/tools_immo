@@ -5,28 +5,43 @@
 {% block extra_css %}
 <style>
     /* Accueil = point de situation : 3 étapes, chacune affiche son chiffre une fois faite. */
-    .ac-etapes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
-    @media (max-width: 991.98px) { .ac-etapes { grid-template-columns: 1fr; } }
-    .ac-etape { display: flex; flex-direction: column; padding: 1.5rem; color: inherit; text-decoration: none;
+    /* Accueil = parcours accompagné : chaque carte dit ce qu'on obtient et à quoi ça
+       sert pour l'étape suivante ; la prochaine étape à faire est mise en avant. */
+    .ac-etapes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.75rem; }
+    @media (max-width: 991.98px) { .ac-etapes { grid-template-columns: 1fr; gap: 1.5rem; } }
+    .ac-etape { position: relative; display: flex; flex-direction: column; padding: 1.5rem; color: inherit; text-decoration: none;
         transition: transform .2s var(--ease-out), box-shadow .2s var(--ease-out), border-color .2s ease; }
     .ac-etape:active { transform: scale(.99); }
     @media (hover: hover) and (pointer: fine) {
         .ac-etape:hover { color: inherit; border-color: #c7cbe0; transform: translateY(-2px);
             box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 12px 28px -8px rgba(15, 23, 42, .14); }
-        .ac-etape:hover .ac-fleche { background: var(--brand); color: #fff; }
     }
-    .ac-haut { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
+    .ac-etape.maintenant { border-color: var(--brand-line); box-shadow: 0 0 0 3px var(--brand-soft), var(--ombre); }
+    /* Flèche qui relie une carte à la suivante */
+    .ac-etape:not(:last-child)::after { content: "\F138"; font-family: "bootstrap-icons"; position: absolute; z-index: 2;
+        right: -1.45rem; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 1.6rem; height: 1.6rem;
+        border-radius: 50%; background: var(--canvas); border: 1px solid var(--hair); color: var(--brand); font-size: .85rem; }
+    @media (max-width: 991.98px) {
+        .ac-etape:not(:last-child)::after { content: "\F128"; right: auto; left: 50%; top: auto; bottom: -1.3rem; transform: translateX(-50%); }
+    }
+    .ac-haut { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
     .ac-num { font-size: .75rem; font-weight: 600; color: var(--mute); letter-spacing: .04em; }
-    .ac-etape h2 { font-size: 1.15rem; margin: 0 0 .35rem; }
-    .ac-etape p { color: var(--mute); font-size: .92rem; margin: 0; }
-    .ac-bas { display: flex; align-items: end; justify-content: space-between; gap: 1rem; margin-top: auto; padding-top: 1.5rem; }
-    .ac-chiffre { font-size: 1.75rem; font-weight: 650; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
-    .ac-chiffre small { font-size: .85rem; font-weight: 500; color: var(--mute); letter-spacing: 0; }
-    .ac-fait { display: inline-flex; align-items: center; gap: .35rem; font-size: .78rem; font-weight: 600; color: var(--ok);
-        background: var(--ok-bg); border: 1px solid var(--ok-line); border-radius: 999px; padding: .15rem .55rem; }
-    .ac-action { font-weight: 600; color: var(--brand); font-size: .92rem; }
-    .ac-fleche { display: inline-grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 999px; flex: none;
-        background: var(--brand-soft); color: var(--brand); transition: background-color .15s ease, color .15s ease; }
+    .ac-statut { display: inline-flex; align-items: center; gap: .35rem; font-size: .78rem; font-weight: 600; border-radius: 999px;
+        padding: .15rem .6rem; border: 1px solid; }
+    .ac-statut.fait { color: var(--ok); background: var(--ok-bg); border-color: var(--ok-line); }
+    .ac-statut.maintenant { color: var(--brand); background: var(--brand-soft); border-color: var(--brand-line); }
+    .ac-etape h2 { font-size: 1.15rem; margin: 0 0 .3rem; }
+    .ac-etape .quoi { color: var(--mute); font-size: .9rem; margin: 0; }
+    .ac-obtenu { margin: 1rem 0 0; font-size: .9rem; }
+    .ac-obtenu .k { font-size: .72rem; font-weight: 600; color: var(--mute); text-transform: uppercase; letter-spacing: .05em; }
+    .ac-obtenu .v { color: var(--ink); font-weight: 500; }
+    .ac-chiffre { font-size: 1.6rem; font-weight: 650; letter-spacing: -.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .ac-chiffre small { font-size: .8rem; font-weight: 500; color: var(--mute); letter-spacing: 0; }
+    .ac-relais { display: flex; gap: .5rem; align-items: flex-start; margin-top: auto; padding: .7rem .8rem; border-radius: 10px;
+        background: var(--soft); border: 1px solid var(--hair); font-size: .84rem; color: var(--ink-2); }
+    .ac-relais i { color: var(--brand); margin-top: .1rem; }
+    .ac-espace { flex: 1 0 1rem; }
+    .ac-action { display: flex; align-items: center; justify-content: space-between; margin-top: 1rem; font-weight: 600; color: var(--brand); font-size: .92rem; }
 
     .ac-outils { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
     @media (max-width: 767.98px) { .ac-outils { grid-template-columns: 1fr; } }
@@ -43,57 +58,71 @@
     <header class="ti-entete">
         <span class="ti-surtitre"><span class="point"></span>Préparer son prêt immobilier</span>
         <h1>Sur quel prix pouvez-vous vous engager&nbsp;?</h1>
-        <p class="lede">Trois étapes, dans l'ordre. Chaque résultat sert à l'étape suivante.</p>
+        <p class="lede">
+            {% if prochaine_etape == 1 %}Commencez par l'étape 1 : tout le reste en découle.
+            {% elif prochaine_etape == 2 %}Étape 1 faite. Prochaine étape : votre capacité d'emprunt.
+            {% else %}Étapes 1 et 2 faites. Il reste à voir les biens à votre portée.{% endif %}
+        </p>
     </header>
 
     <div class="ac-etapes">
-        <a href="{% url 'depenses_mensuelles' %}" class="ti-carte ac-etape">
+        <a href="{% url 'depenses_mensuelles' %}" class="ti-carte ac-etape{% if prochaine_etape == 1 %} maintenant{% endif %}">
             <div class="ac-haut">
                 <span class="ti-icone-carre"><i class="bi bi-wallet2" aria-hidden="true"></i></span>
-                {% if depenses_affichees %}<span class="ac-fait"><i class="bi bi-check2" aria-hidden="true"></i>Fait</span>
+                {% if revenus_affiches %}<span class="ac-statut fait"><i class="bi bi-check2" aria-hidden="true"></i>Fait</span>
+                {% elif prochaine_etape == 1 %}<span class="ac-statut maintenant">À faire maintenant</span>
                 {% else %}<span class="ac-num">ÉTAPE 1</span>{% endif %}
             </div>
-            <h2>Mes dépenses</h2>
-            <p>Déposez vos relevés PDF : vous obtenez ce qui entre et sort chaque mois.</p>
-            <div class="ac-bas">
-                {% if depenses_affichees %}
-                    <div class="ac-chiffre">{{ depenses_affichees }} <small>€ / mois</small></div>
-                {% else %}
-                    <span class="ac-action">Déposer mes relevés</span>
-                {% endif %}
-                <span class="ac-fleche" aria-hidden="true"><i class="bi bi-arrow-right"></i></span>
+            <h2>1. Mes relevés</h2>
+            <p class="quoi">Déposez vos relevés de compte en PDF.</p>
+            <div class="ac-obtenu">
+                <div class="k">Vous obtenez</div>
+                {% if revenus_affiches %}<div class="ac-chiffre">{{ revenus_affiches }} <small>€ de revenus / mois</small></div>
+                {% else %}<div class="v">Vos vrais revenus et crédits, mois par mois.</div>{% endif %}
             </div>
+            <span class="ac-espace"></span>
+            <div class="ac-relais"><i class="bi bi-arrow-return-right" aria-hidden="true"></i>
+                <span><strong>Sert à l'étape 2 :</strong> le simulateur est rempli pour vous.</span></div>
+            <span class="ac-action">{% if revenus_affiches %}Revoir mes relevés{% else %}Déposer mes relevés{% endif %}<i class="bi bi-arrow-right" aria-hidden="true"></i></span>
         </a>
 
-        <a href="{% url 'simulateur_pret' %}" class="ti-carte ac-etape">
+        <a href="{% url 'simulateur_pret' %}" class="ti-carte ac-etape{% if prochaine_etape == 2 %} maintenant{% endif %}">
             <div class="ac-haut">
                 <span class="ti-icone-carre"><i class="bi bi-calculator" aria-hidden="true"></i></span>
-                {% if capacite_affichee %}<span class="ac-fait"><i class="bi bi-check2" aria-hidden="true"></i>Fait</span>
+                {% if capacite_affichee %}<span class="ac-statut fait"><i class="bi bi-check2" aria-hidden="true"></i>Fait</span>
+                {% elif prochaine_etape == 2 %}<span class="ac-statut maintenant">À faire maintenant</span>
                 {% else %}<span class="ac-num">ÉTAPE 2</span>{% endif %}
             </div>
-            <h2>Ma capacité d'emprunt</h2>
-            <p>Revenus, apport, durée : combien la banque peut vous prêter.</p>
-            <div class="ac-bas">
-                {% if capacite_affichee %}
-                    <div class="ac-chiffre">{{ capacite_affichee }} <small>€</small></div>
-                {% else %}
-                    <span class="ac-action">Lancer le simulateur</span>
-                {% endif %}
-                <span class="ac-fleche" aria-hidden="true"><i class="bi bi-arrow-right"></i></span>
+            <h2>2. Ma capacité d'emprunt</h2>
+            <p class="quoi">Vérifiez vos chiffres, ajoutez apport et durée.</p>
+            <div class="ac-obtenu">
+                <div class="k">Vous obtenez</div>
+                {% if prix_max_affiche %}<div class="ac-chiffre">{{ prix_max_affiche }} <small>€ prix maximum</small></div>
+                {% elif capacite_affichee %}<div class="ac-chiffre">{{ capacite_affichee }} <small>€ empruntables</small></div>
+                {% else %}<div class="v">Le prix maximum que vous pouvez viser.</div>{% endif %}
             </div>
+            <span class="ac-espace"></span>
+            <div class="ac-relais"><i class="bi bi-arrow-return-right" aria-hidden="true"></i>
+                <span><strong>Sert à l'étape 3 :</strong> chaque bien est comparé à ce prix.</span></div>
+            <span class="ac-action">{% if capacite_affichee %}Ajuster ma simulation{% else %}Lancer le simulateur{% endif %}<i class="bi bi-arrow-right" aria-hidden="true"></i></span>
         </a>
 
-        <a href="{% url 'biens_financables' %}" class="ti-carte ac-etape">
+        <a href="{% url 'biens_financables' %}" class="ti-carte ac-etape{% if prochaine_etape == 3 %} maintenant{% endif %}">
             <div class="ac-haut">
                 <span class="ti-icone-carre"><i class="bi bi-house-check" aria-hidden="true"></i></span>
-                <span class="ac-num">ÉTAPE 3</span>
+                {% if prochaine_etape == 3 %}<span class="ac-statut maintenant">À faire maintenant</span>
+                {% else %}<span class="ac-num">ÉTAPE 3</span>{% endif %}
             </div>
-            <h2>Les biens à ma portée</h2>
-            <p>Les annonces des agences, triées selon votre budget réel.</p>
-            <div class="ac-bas">
-                <span class="ac-action">Voir les biens</span>
-                <span class="ac-fleche" aria-hidden="true"><i class="bi bi-arrow-right"></i></span>
+            <h2>3. Les biens à ma portée</h2>
+            <p class="quoi">Les annonces des agences de votre ville.</p>
+            <div class="ac-obtenu">
+                <div class="k">Vous obtenez</div>
+                <div class="v">Chaque bien classé : finançable, limite ou hors budget.</div>
             </div>
+            <span class="ac-espace"></span>
+            <div class="ac-relais"><i class="bi bi-flag" aria-hidden="true"></i>
+                <span><strong>Pour finir :</strong> votre dossier, prêt à montrer à la banque.</span></div>
+            <span class="ac-action">Voir les biens<i class="bi bi-arrow-right" aria-hidden="true"></i></span>
         </a>
     </div>
 
