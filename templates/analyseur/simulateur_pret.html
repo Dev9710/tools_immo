@@ -173,7 +173,7 @@
 
                 <div class="sp-bloc">
                     <h2 class="sp-bloc-titre"><span class="sp-num">3</span>Votre prêt</h2>
-                    <div class="sp-champs">
+                    <div class="sp-champs sp-champs-3">
                         <div class="plein">
                             <span class="form-label d-block" id="lib-duree">Durée</span>
                             <div class="ti-segment" role="group" aria-labelledby="lib-duree">
@@ -202,13 +202,18 @@
                                 <option value="risque"{% if saisie.profil|default:'moyen' == 'risque' %} selected{% endif %}>Fragile (CDD, intérim)</option>
                             </select>
                         </div>
+                        <div>
+                            <label class="form-label" for="age">Votre âge</label>
+                            <input type="number" class="form-control" id="age" name="age" min="18" max="70" value="{{ saisie.age|default:'35' }}" inputmode="numeric">
+                            <div class="sp-aide">Le plus âgé des emprunteurs. Sert à l'assurance du prêt.</div>
+                        </div>
                         <div class="plein sp-taux-applique" id="taux-applique" aria-live="polite" hidden></div>
                     </div>
                 </div>
 
                 <div class="sp-bloc">
                     <h2 class="sp-bloc-titre"><span class="sp-num">4</span>Votre foyer</h2>
-                    <div class="sp-champs sp-champs-3">
+                    <div class="sp-champs">
                         <div>
                             <span class="form-label d-block" id="lib-adultes">Adultes</span>
                             <div class="ti-segment" role="group" aria-labelledby="lib-adultes">
@@ -225,10 +230,6 @@
                                 <option value="3"{% if saisie.nb_enfants|default:'0' == '3' %} selected{% endif %}>3</option>
                                 <option value="4"{% if saisie.nb_enfants|default:'0' == '4' %} selected{% endif %}>4 ou plus</option>
                             </select>
-                        </div>
-                        <div>
-                            <label class="form-label" for="age">Âge du plus âgé</label>
-                            <input type="number" class="form-control" id="age" name="age" min="18" max="70" value="{{ saisie.age|default:'35' }}" inputmode="numeric">
                         </div>
                     </div>
                 </div>
@@ -457,7 +458,7 @@ function afficherCapacite(d, saisie) {
             Ajouté à mon dossier · ${d.statut_dossier || ''}</a>`;
     const applique = document.getElementById('taux-applique');
     applique.innerHTML = `<i class="bi bi-percent" aria-hidden="true"></i> Taux appliqué : <strong>${taux(d.taux_nominal)}</strong>
-        + assurance ${taux(d.taux_assurance)}. Il change avec la durée, la région et le profil.`;
+        + assurance ${taux(d.taux_assurance)}. Le taux suit la durée, la région et le profil ; l'assurance suit votre âge.`;
     applique.hidden = false;
     document.getElementById('sp-mini-v').textContent = eur(d.prix_achat_max);
     mini.classList.add('visible');
