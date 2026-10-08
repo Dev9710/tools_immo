@@ -1481,6 +1481,41 @@ def render_selection_interface_with_month(prelevements, achats_cb, mois_disponib
     return HttpResponse(html_content)
 
 
+# Réponses du simulateur gardées dans le navigateur (session en cookie signé, 1 an),
+# pour les retrouver à la visite suivante. Les taux n'en font pas partie : ils
+# viennent toujours du barème du jour.
+SAISIE_SIMULATEUR = ('revenus_nets', 'charges_mensuelles', 'apport', 'type_bien',
+                     'primo_accedant', 'duree', 'region', 'profil', 'nb_adultes',
+                     'nb_enfants', 'age')
+
+
+def _memoriser_saisie(request, data, mode):
+    saisie = dict(request.session.get('simulateur_saisie', {}))
+    if mode == 'capacite':
+        # Une case décochée n'est pas envoyée : chaque champ est réécrit.
+        saisie.update({k: str(data.get(k, '') or '') for k in SAISIE_SIMULATEUR})
+    else:
+        saisie.update({'montant_emprunt': str(data.get('montant_emprunt', '') or ''),
+                       'duree_mensualite': str(data.get('duree', '') or '')})
+    saisie['mode'] = mode
+    request.session['simulateur_saisie'] = saisie
+
+
+def _oublier_revenus_saisis(session):
+    """De nouveaux relevés font foi pour les revenus et les crédits."""
+    saisie = dict(session.get('simulateur_saisie', {}))
+    for k in ('revenus_nets', 'charges_mensuelles'):
+        saisie.pop(k, None)
+    session['simulateur_saisie'] = saisie
+
+
+def effacer_dossier(request):
+    """« Effacer mon dossier » : vide tout ce que le navigateur garde."""
+    if request.method == 'POST':
+        request.session.flush()
+    return redirect('accueil')
+
+
 def simulateur_pret(request):
     """Interface principale du simulateur de prêt immobilier avec dashboard intégré"""
 
@@ -1575,6 +1610,7 @@ def simulateur_pret(request):
                     montant, duree, taux_nominal, taux_assurance
                 )
 
+            _memoriser_saisie(request, data, mode)
             return JsonResponse({'success': True, 'data': resultat})
 
         except Exception as e:
@@ -1584,6 +1620,7 @@ def simulateur_pret(request):
     # mensuelles ont deja ete analysees, on prerempli le champ « charges » :
     # l'utilisateur n'a pas a recopier un chiffre que l'outil connait deja.
     return render(request, 'analyseur/simulateur_pret.html', {
+        'saisie': request.session.get('simulateur_saisie', {}),
         'charges_credits': request.session.get('charges_credits'),
         'loyer_actuel': request.session.get('loyer_actuel'),
         'revenus_mensuels': request.session.get('revenus_mensuels'),
@@ -2268,6 +2305,7 @@ def depenses_mensuelles(request):
     request.session['revenus_mensuels'] = analyse['resume']['entrees_moyennes']
     request.session['charges_credits'] = analyse['charges_bancaires']['credits_mensuels']
     request.session['loyer_actuel'] = analyse['charges_bancaires']['loyer_mensuel']
+    _oublier_revenus_saisis(request.session)
 
     return render(request, 'analyseur/depenses_mensuelles.html', {
         'analyse': analyse,

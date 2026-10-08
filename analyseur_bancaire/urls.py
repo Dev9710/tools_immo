@@ -11,6 +11,7 @@ urlpatterns = [
     path('charges-fixes/', views.charges_fixes, name='charges_fixes'),
     path('simulateur-pret/', views.simulateur_pret, name='simulateur_pret'),
     path('dashboard/', views.dashboard_dossier, name='dashboard'),
+    path('dossier/effacer/', views.effacer_dossier, name='effacer_dossier'),
     path('export-dossier-pdf/', views.export_dossier_pdf,
          name='export_dossier_pdf'),
     path('biens-financables/', views.biens_financables, name='biens_financables'),

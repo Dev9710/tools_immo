@@ -188,3 +188,56 @@ class SimulateurChampsTests(SimpleTestCase):
         # Un pas de 100 € bloquait l'envoi avec des revenus repris des relevés (5 492 €).
         r = self.client.get(reverse('simulateur_pret'))
         self.assertContains(r, 'name="revenus_nets" min="0" step="1"')
+
+
+class DossierMemoriseTests(SimpleTestCase):
+    """Les réponses du simulateur sont gardées dans le navigateur (cookie signé, 1 an)
+    et remises à la visite suivante (choix utilisateur du 08/10/2026)."""
+
+    def _simuler(self, **champs):
+        data = {'mode': 'capacite', 'revenus_nets': '4000', 'charges_mensuelles': '150',
+                'duree': '25', 'region': 'ile_de_france', 'profil': 'bon', 'age': '41',
+                'nb_adultes': '1', 'nb_enfants': '2', 'apport': '30000', 'type_bien': 'neuf',
+                'primo_accedant': 'on'}
+        data.update(champs)
+        r = self.client.post(reverse('simulateur_pret'), json.dumps(data), content_type='application/json')
+        self.assertTrue(r.json()['success'])
+
+    def test_les_reponses_reviennent_a_la_visite_suivante(self):
+        self._simuler()
+        page = self.client.get(reverse('simulateur_pret')).content.decode()
+        for attendu in ('name="revenus_nets" min="0" step="1" value="4000"',
+                        'name="charges_mensuelles" min="0" step="1" value="150"',
+                        'name="apport" min="0" step="1" value="30000"',
+                        'id="duree-25" value="25" checked',
+                        'id="type-neuf" value="neuf" checked',
+                        'id="adultes-1" value="1" checked',
+                        'value="ile_de_france" selected', 'value="bon" selected', 'value="2" selected',
+                        'name="age" min="18" max="70" value="41"',
+                        'id="primo_accedant" checked'):
+            self.assertIn(attendu, page)
+
+    def test_case_decochee_retenue(self):
+        self._simuler()
+        self._simuler(primo_accedant='')
+        page = self.client.get(reverse('simulateur_pret')).content.decode()
+        self.assertNotIn('id="primo_accedant" checked', page)
+
+    def test_nouveaux_releves_remplacent_revenus_saisis(self):
+        from .views import _oublier_revenus_saisis
+        self._simuler()
+        s = self.client.session
+        _oublier_revenus_saisis(s)
+        self.assertNotIn('revenus_nets', s['simulateur_saisie'])
+        self.assertEqual(s['simulateur_saisie']['apport'], '30000')
+
+    def test_cookie_garde_un_an(self):
+        from django.conf import settings
+        self.assertGreaterEqual(settings.SESSION_COOKIE_AGE, 365 * 24 * 3600)
+
+    def test_effacer_mon_dossier(self):
+        self._simuler()
+        r = self.client.post(reverse('effacer_dossier'))
+        self.assertRedirects(r, reverse('accueil'))
+        self.assertNotIn('simulateur_saisie', self.client.session)
+        self.assertNotIn('capacite_emprunt', self.client.session)

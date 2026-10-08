@@ -102,3 +102,8 @@ AGENCE_IMMO_DIR = Path(os.environ.get(
 # Python du venv d'agence-immo, pour lancer veille.py (bouton « Mettre à jour cette ville »).
 AGENCE_IMMO_PYTHON = Path(os.environ.get(
     'AGENCE_IMMO_PYTHON', AGENCE_IMMO_DIR / 'venv' / 'Scripts' / 'python.exe'))
+
+# Le dossier (réponses du simulateur, chiffres des relevés) reste dans le navigateur
+# un an, compté depuis la dernière visite. « Effacer mon dossier » le vide.
+SESSION_COOKIE_AGE = 365 * 24 * 3600
+SESSION_SAVE_EVERY_REQUEST = True
