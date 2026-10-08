@@ -27,20 +27,20 @@ from . import biens_gino
 # alerte au-delà de BAREME_VALIDITE_JOURS.
 #
 # Taux nominaux hors assurance, profil « moyen » = profil « bon » de Meilleurtaux,
-# baromètre du 01/10/2026 : 3,71 / 3,80 / 3,93 % sur 15 / 20 / 25 ans (excellent
-# 3,30 / 3,40 / 3,50 ; très bon 3,52 / 3,61 / 3,70). Hausse continue, « vers la barre
-# des 4 % » (barèmes standards 3,86 % ; 29/09 : 3,58 / 3,64 / 3,73). 7 et 10 ans : même écart
-# au 15 ans qu'auparavant (−0,07 ; −0,02). Écarts régionaux conservés (IDF −0,08 ;
-# Provence −0,03 ; Rhône-Alpes −0,06 par rapport au national).
-TAUX_DATE = date(2026, 10, 1)
+# baromètre du 05/10/2026 : 3,76 / 3,85 / 4,00 % sur 15 / 20 / 25 ans (excellent
+# 3,30 / 3,40 / 3,50 ; très bon 3,55 / 3,68 / 3,75). Hausse continue, le 25 ans
+# atteint 4 % (01/10 : 3,71 / 3,80 / 3,93 ; usure 5,40 % au 01/10 pour 20 ans et +).
+# 7 et 10 ans : même écart au 15 ans qu'auparavant (−0,07 ; −0,02). Écarts régionaux
+# conservés (IDF −0,08 ; Provence −0,03 ; Rhône-Alpes −0,06 par rapport au national).
+TAUX_DATE = date(2026, 10, 5)
 TAUX_SOURCE = "Meilleurtaux"
 BAREME_VALIDITE_JOURS = 7    # Meilleurtaux publie son baromètre chaque semaine
 TAUX_ACTUELS = {
     'regions': {
-        'ile_de_france': {'7': 3.56, '10': 3.61, '15': 3.63, '20': 3.72, '25': 3.85},
-        'provence': {'7': 3.61, '10': 3.66, '15': 3.68, '20': 3.77, '25': 3.90},
-        'rhone_alpes': {'7': 3.58, '10': 3.63, '15': 3.65, '20': 3.74, '25': 3.87},
-        'autre': {'7': 3.64, '10': 3.69, '15': 3.71, '20': 3.80, '25': 3.93}
+        'ile_de_france': {'7': 3.61, '10': 3.66, '15': 3.68, '20': 3.77, '25': 3.92},
+        'provence': {'7': 3.66, '10': 3.71, '15': 3.73, '20': 3.82, '25': 3.97},
+        'rhone_alpes': {'7': 3.63, '10': 3.68, '15': 3.70, '20': 3.79, '25': 3.94},
+        'autre': {'7': 3.69, '10': 3.74, '15': 3.76, '20': 3.85, '25': 4.00}
     },
     'profils': {
         'excellent': -0.30,    # CDI, >10% apport, épargne
