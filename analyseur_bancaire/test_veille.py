@@ -232,3 +232,42 @@ class DemarrageTests(SimpleTestCase):
     def test_popen_echoue(self):
         popen = mock.MagicMock(side_effect=OSError('boom'))
         self.assertFalse(self._lancer(popen))
+
+
+class SuiviEnDirectTests(SimpleTestCase):
+    """Pendant un contrôle : pour CE passage, chaque agence est faite, en cours, en attente
+    ou non vérifiable (sans recette) — et non l'état du contrôle précédent."""
+
+    def setUp(self):
+        self.dossier = Path(tempfile.mkdtemp()) / "creteil"
+        self.dossier.mkdir()
+        for s in "abcde":
+            (self.dossier / f"_gino_{s}.json").write_text("[]", encoding="utf-8")
+        for s in "abcd":
+            (self.dossier / f"_recette_{s}.json").write_text("{}", encoding="utf-8")
+        (self.dossier / "_veille_etat.json").write_text(json.dumps({
+            "en_cours": True, "debut": "2026-10-09T10:00",
+            "avancement": {"fait": 2, "total": 4, "agence": "c"},
+            "agences": {
+                "a": {"etat": "ok", "controle_le": "2026-10-09T10:02", "evenements": {"nouveau": 1}},
+                "b": {"etat": "injoignable", "controle_le": "2026-10-09T10:03"},
+                "c": {"etat": "ok", "controle_le": "2026-10-08T09:00"},
+                "d": {"etat": "ok", "verifie_le": "2026-10-08T09:00"},      # passage d'hier : en attente
+                "e": {"etat": "sans_recette"}}}), encoding="utf-8")
+
+    def test_phase_de_chaque_agence(self):
+        s = biens_gino.suivi_veille(self.dossier)
+        self.assertEqual((s["fait"], s["total"]), (2, 4))
+        phases = {l["slug"]: l["phase"] for l in s["lignes"]}
+        self.assertEqual(phases, {"a": "faite", "b": "faite", "c": "en_cours", "d": "attente", "e": "sans_recette"})
+        self.assertEqual([l["slug"] for l in s["lignes"]], ["c", "d", "a", "b", "e"])   # en cours d'abord
+        a = next(l for l in s["lignes"] if l["slug"] == "a")
+        self.assertIn("1 nouveau", a["texte"])
+        b = next(l for l in s["lignes"] if l["slug"] == "b")
+        self.assertTrue(b["probleme"])
+
+    def test_suivi_dans_la_reponse_d_etat(self):
+        with override_settings(AGENCE_IMMO_DIR=self.dossier.parent), \
+                mock.patch('analyseur_bancaire.views.biens_gino.veille_en_cours', return_value=True):
+            r = self.client.get(reverse('etat_veille'), {'ville': 'creteil'})
+        self.assertEqual(r.json()['suivi']['fait'], 2)

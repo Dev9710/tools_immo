@@ -385,6 +385,45 @@ def veille_en_cours(dossier, maintenant=None):
     return _processus_vivant(verrou.get("pid"))
 
 
+ORDRE_PHASE = {"en_cours": 0, "attente": 1, "faite": 2, "sans_recette": 3}
+
+
+def suivi_veille(dossier):
+    """Pendant un contrôle : où en est CHAQUE agence pour ce passage-ci (faite, en cours,
+    en attente, non vérifiable) — et non l'état du contrôle précédent."""
+    dossier = Path(dossier)
+    etat = etat_veille(dossier) or {}
+    debut = str(etat.get("debut") or "")
+    agences = etat.get("agences") if isinstance(etat.get("agences"), dict) else {}
+    en_cours = {x.strip() for x in str((etat.get("avancement") or {}).get("agence") or "").split(",") if x.strip()}
+    recettes = {f.stem[len("_recette_"):] for f in dossier.glob("_recette_*.json")}
+    slugs = recettes | {f.stem[len("_gino_"):] for f in dossier.glob("_gino_*.json")}
+    noms = _noms_stan(dossier)
+    lignes = []
+    for slug in slugs:
+        a = agences.get(slug) if isinstance(agences.get(slug), dict) else {}
+        quand = str(a.get("controle_le") or a.get("verifie_le") or "")
+        if slug not in recettes:
+            phase, texte = "sans_recette", "pas de recette : non vérifiable, données du dernier passage de Gino"
+        elif slug in en_cours:
+            phase, texte = "en_cours", "vérification en cours…"
+        elif debut and quand >= debut:
+            phase = "faite"
+            ev = a.get("evenements") if isinstance(a.get("evenements"), dict) else {}
+            resume = ", ".join(f"{n} {LIBELLES_EVENEMENTS.get(k, k)}" for k, n in ev.items())
+            texte = {"ok": "vérifiée" + (f" ({resume})" if resume else " (aucun changement)"),
+                     "injoignable": "site injoignable : données conservées"}.get(
+                         a.get("etat"), "recette à réparer" + (f" ({a.get('raison')})" if a.get("raison") else ""))
+        else:
+            phase, texte = "attente", "en attente"
+        lignes.append({"slug": slug, "nom": _nom_agence(Path(f"_gino_{slug}.json"), noms), "phase": phase,
+                       "texte": texte, "probleme": phase == "faite" and a.get("etat") != "ok",
+                       "heure": quand[11:16] if phase == "faite" else ""})
+    lignes.sort(key=lambda l: (ORDRE_PHASE[l["phase"]], l["nom"]))
+    return {"lignes": lignes, "total": len(recettes),
+            "fait": sum(1 for l in lignes if l["phase"] == "faite")}
+
+
 def agences_veille(dossier):
     """État de chaque agence au dernier contrôle, les problèmes d'abord."""
     etat = etat_veille(dossier) or {}

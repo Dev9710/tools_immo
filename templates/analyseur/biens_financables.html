@@ -181,6 +181,19 @@
   .bf .agences-veille summary { cursor: pointer; font-size: .85rem; color: var(--ink-2); }
   .bf .agences-veille ul { list-style: none; padding: 0; margin: .5rem 0 0; font-size: .85rem; }
   .bf .agences-veille li { padding: .35rem 0; border-top: 1px solid var(--hair); }
+  /* Suivi en direct de la vérification */
+  .bf .suivi summary { color: var(--ink); }
+  .bf .suivi-barre { height: 6px; border-radius: 999px; background: #e3e6ee; overflow: hidden; margin: .6rem 0 .2rem; max-width: 32rem; }
+  .bf .suivi-barre span { display: block; height: 100%; background: var(--brand); border-radius: 999px; transition: width .4s var(--ease-out, ease-out); }
+  .bf .suivi li { display: flex; align-items: baseline; gap: .4rem; flex-wrap: wrap; }
+  .bf .suivi li .nom { font-weight: 600; }
+  .bf .suivi .phase-faite i { color: var(--ok); } .bf .suivi .phase-faite.probleme i { color: var(--ko); }
+  .bf .suivi .phase-en_cours { background: var(--brand-soft); border-radius: 8px; padding-left: .5rem; padding-right: .5rem; }
+  .bf .suivi .phase-en_cours i { color: var(--brand); display: inline-block; animation: tourne 1s linear infinite; }
+  .bf .suivi .phase-attente, .bf .suivi .phase-sans_recette { color: var(--mute); }
+  .bf .suivi .phase-attente .nom, .bf .suivi .phase-sans_recette .nom { font-weight: 500; }
+  @keyframes tourne { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .bf .suivi .phase-en_cours i { animation: none; } }
   .bf .etat-ok { color: var(--ok); } .bf .etat-ko { color: var(--ko); } .bf .etat-sans { color: var(--mute); }
   .bf .a-verifier { display: inline-flex; align-items: center; gap: .25rem; font-size: .7rem; font-weight: 600;
     color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 999px;
@@ -232,7 +245,7 @@
       </form>
       <span class="small mute" id="veille-avancement" aria-live="polite"
             {% if veille_en_cours %}data-etat-url="{% url 'etat_veille' %}?ville={{ ville.slug }}"{% endif %}>
-        {% if veille_en_cours %}Contrôle des agences en cours…
+        {% if veille_en_cours %}{% if suivi_veille %}{{ suivi_veille.fait }} / {{ suivi_veille.total }} agences vérifiées · le détail se met à jour ci-dessous{% else %}Contrôle des agences en cours…{% endif %}
         {% elif veille_fin %}Vérifié le {{ veille_fin|date:"d/m à H:i" }}, sans IA, fiche par fiche.
         {% else %}Pas encore vérifié : les biens viennent du dernier passage de Gino.{% endif %}
       </span>
@@ -244,7 +257,18 @@
         <li>Vérifiez le réglage <code translate="no">AGENCE_IMMO_PYTHON</code>, puis réessayez.</li></ul>
     </div>
     {% endif %}
-    {% if agences_veille %}
+    {% if suivi_veille %}
+    <details class="agences-veille suivi mt-2" open id="suivi-veille">
+      <summary>Suivi de la vérification : <strong id="suivi-compte">{{ suivi_veille.fait }} agence{{ suivi_veille.fait|pluralize }} sur {{ suivi_veille.total }} vérifiée{{ suivi_veille.fait|pluralize }}</strong></summary>
+      <div class="suivi-barre" role="progressbar" aria-valuemin="0" aria-valuemax="{{ suivi_veille.total }}" aria-valuenow="{{ suivi_veille.fait }}" id="suivi-barre">
+        <span style="width: {% widthratio suivi_veille.fait suivi_veille.total 100 %}%"></span></div>
+      <ul id="suivi-liste">
+        {% for l in suivi_veille.lignes %}
+        <li class="phase-{{ l.phase }}{% if l.probleme %} probleme{% endif %}"><i class="bi {% if l.phase == 'faite' %}{% if l.probleme %}bi-exclamation-triangle-fill{% else %}bi-check-circle-fill{% endif %}{% elif l.phase == 'en_cours' %}bi-arrow-repeat{% elif l.phase == 'attente' %}bi-hourglass{% else %}bi-dash-circle{% endif %}" aria-hidden="true"></i> <span class="nom">{{ l.nom }}</span> — {{ l.texte }}{% if l.heure %} <small class="mute">à {{ l.heure }}</small>{% endif %}</li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% elif agences_veille %}
     <details class="agences-veille mt-2">
       <summary>État des agences au dernier contrôle</summary>
       <ul>
@@ -549,6 +573,22 @@
 })();
 </script>
 <script>
+// Suivi en direct : chaque agence faite / en cours / en attente / non vérifiable pour CE passage.
+function afficherSuivi(s) {
+  const liste = document.getElementById('suivi-liste');
+  if (!liste) return;
+  const echapper = t => String(t).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+  const icone = l => l.phase === 'faite' ? (l.probleme ? 'bi-exclamation-triangle-fill' : 'bi-check-circle-fill')
+    : ({en_cours: 'bi-arrow-repeat', attente: 'bi-hourglass', sans_recette: 'bi-dash-circle'})[l.phase];
+  liste.innerHTML = s.lignes.map(l => `<li class="phase-${l.phase}${l.probleme ? ' probleme' : ''}"><i class="bi ${icone(l)}" aria-hidden="true"></i> `
+    + `<span class="nom">${echapper(l.nom)}</span> — ${echapper(l.texte)}${l.heure ? ` <small class="mute">à ${l.heure}</small>` : ''}</li>`).join('');
+  const pl = s.fait > 1 ? 's' : '';
+  document.getElementById('suivi-compte').textContent = `${s.fait} agence${pl} sur ${s.total} vérifiée${pl}`;
+  const barre = document.getElementById('suivi-barre');
+  barre.setAttribute('aria-valuenow', s.fait);
+  barre.firstElementChild.style.width = (s.total ? Math.round(100 * s.fait / s.total) : 0) + '%';
+}
+
 // Pendant un contrôle : lit l'avancement toutes les 2 s, puis recharge la page à la fin.
 (function () {
   const zone = document.getElementById('veille-avancement');
@@ -559,7 +599,9 @@
     .then(e => {
       if (!e.en_cours) { location.reload(); return; }
       const a = e.avancement || {};
-      zone.textContent = `${a.fait || 0} agence${(a.fait || 0) > 1 ? 's' : ''} sur ${a.total || '?'} vérifiée${(a.fait || 0) > 1 ? 's' : ''} · en cours : ${a.agence || '…'}`;
+      const f = e.suivi ? e.suivi.fait : (a.fait || 0), t = e.suivi ? e.suivi.total : (a.total || '?');
+      zone.textContent = `${f} / ${t} agences vérifiées · le détail se met à jour ci-dessous`;
+      if (e.suivi) afficherSuivi(e.suivi);
       setTimeout(suivre, 2000);
     })
     .catch(() => setTimeout(suivre, 4000));

@@ -2661,6 +2661,8 @@ def biens_financables(request):
         contexte['veille'] = biens_gino.etat_veille(dossier)
         contexte['veille_en_cours'] = biens_gino.veille_en_cours(dossier)
         contexte['agences_veille'] = biens_gino.agences_veille(dossier)
+        if contexte['veille_en_cours']:
+            contexte['suivi_veille'] = biens_gino.suivi_veille(dossier)
         fin = (contexte['veille'] or {}).get('fin')
         try:
             contexte['veille_fin'] = datetime.fromisoformat(fin) if fin else None
@@ -2722,4 +2724,5 @@ def etat_veille_json(request):
         return JsonResponse({}, status=404)
     etat = biens_gino.etat_veille(racine / slug) or {}
     etat['en_cours'] = biens_gino.veille_en_cours(racine / slug)
+    etat['suivi'] = biens_gino.suivi_veille(racine / slug)
     return JsonResponse(etat)
