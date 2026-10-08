@@ -271,12 +271,12 @@
 
       {% if analyse.resume.internes_sortants_moyens or analyse.resume.internes_entrants_moyens %}
       <div class="alert alert-light border mt-3 mb-0 small">
-        <i class="bi bi-piggy-bank me-1"></i><strong>Épargne et virements entre tes comptes : {{ analyse.resume.internes_sortants_affiches }} €/mois</strong>
+        <i class="bi bi-piggy-bank me-1"></i><strong>Épargne et virements entre vos comptes : {{ analyse.resume.internes_sortants_affiches }} €/mois</strong>
         <ul class="mb-0 mt-1">
-          <li>Virements vers tes comptes, ceux du foyer ou ton épargne (Livret A, LDDS, PEL…).</li>
+          <li>Virements vers vos comptes, ceux du foyer ou votre épargne (Livret A, LDDS, PEL…).</li>
           <li>Ce ne sont ni des dépenses ni des revenus : ils ne sont pas comptés dans les entrées et sorties ci-dessus.</li>
-          {% if analyse.resume.internes_entrants_moyens %}<li>Dans l'autre sens, {{ analyse.resume.internes_entrants_affiches }} €/mois reviennent de tes autres comptes.</li>{% endif %}
-          <li>Bon point pour ta banque : c'est la preuve que tu épargnes chaque mois.</li>
+          {% if analyse.resume.internes_entrants_moyens %}<li>Dans l'autre sens, {{ analyse.resume.internes_entrants_affiches }} €/mois reviennent de vos autres comptes.</li>{% endif %}
+          <li>Bon point pour votre banque : c'est la preuve que vous épargnez chaque mois.</li>
         </ul>
       </div>
       {% endif %}

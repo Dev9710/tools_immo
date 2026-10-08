@@ -234,7 +234,7 @@
     <div class="alert alert-warning small mt-2 mb-0">
       <strong>Impossible de lancer la vérification.</strong>
       <ul class="mb-0"><li>Le programme d'agence-immo (veille.py ou son Python) est introuvable.</li>
-        <li>Vérifie le réglage <code translate="no">AGENCE_IMMO_PYTHON</code>, puis réessaie.</li></ul>
+        <li>Vérifiez le réglage <code translate="no">AGENCE_IMMO_PYTHON</code>, puis réessayez.</li></ul>
     </div>
     {% endif %}
     {% if agences_veille %}
@@ -261,13 +261,13 @@
     <p class="fw-bold mb-1"><i class="bi bi-folder-x" aria-hidden="true"></i> Je ne trouve pas les résultats de Gino.</p>
     <ul class="mb-0">
       <li>Dossier cherché : <code translate="no">{{ racine }}</code></li>
-      <li>Indique le bon dossier avec la variable <code translate="no">AGENCE_IMMO_DIR</code>, puis relance tools_immo.</li>
+      <li>Indiquez le bon dossier avec la variable <code translate="no">AGENCE_IMMO_DIR</code>, puis relancez tools_immo.</li>
     </ul>
   </div>
   {% elif not villes %}
   <div class="alert alert-info">
     <p class="fw-bold mb-1"><i class="bi bi-info-circle" aria-hidden="true"></i> Aucune ville relevée pour l'instant.</p>
-    <ul class="mb-0"><li>Lance Gino sur une ville, puis reviens ici.</li></ul>
+    <ul class="mb-0"><li>Lancez Gino sur une ville, puis revenez ici.</li></ul>
   </div>
   {% endif %}
 
@@ -276,15 +276,15 @@
   <section class="budget-carte p-4 p-lg-5 mb-3 apparait apparait-2" aria-labelledby="titre-budget">
     <div class="row g-4 g-lg-5 align-items-center">
       <div class="col-lg-5">
-        <h2 id="titre-budget" class="etiquette">Prix maximum que tu peux viser</h2>
+        <h2 id="titre-budget" class="etiquette">Prix maximum que vous pouvez viser</h2>
         <div class="budget-prix num">{% if analyse.resume.prix_max %}{{ analyse.resume.prix_max|floatformat:0|intcomma }}<small>€</small>{% else %}—{% endif %}</div>
         <ul class="budget-notes">
-          <li><i class="bi bi-info-circle" aria-hidden="true"></i><span>Calculé sur tes revenus actuels, hors reste à vivre.</span></li>
-          {% if mensualite_max %}<li><i class="bi bi-calendar3" aria-hidden="true"></i><span>Mensualité maximum : <b class="num">{{ mensualite_max|floatformat:0|intcomma }} €/mois</b> (35 % de tes revenus, charges déduites).</span></li>{% endif %}
+          <li><i class="bi bi-info-circle" aria-hidden="true"></i><span>Calculé sur vos revenus actuels, hors reste à vivre.</span></li>
+          {% if mensualite_max %}<li><i class="bi bi-calendar3" aria-hidden="true"></i><span>Mensualité maximum : <b class="num">{{ mensualite_max|floatformat:0|intcomma }} €/mois</b> (35 % de vos revenus, charges déduites).</span></li>{% endif %}
         </ul>
       </div>
       <div class="col-lg-7">
-        <div class="etiquette">Les biens de {{ ville.nom }} face à ton budget</div>
+        <div class="etiquette">Les biens de {{ ville.nom }} face à votre budget</div>
         <div class="repartition" aria-hidden="true">
           {% if analyse.resume.financable %}<span style="flex: {{ analyse.resume.financable }}; background: var(--ok-dot)"></span>{% endif %}
           {% if analyse.resume.limite %}<span style="flex: {{ analyse.resume.limite }}; background: var(--warn-dot)"></span>{% endif %}
@@ -295,7 +295,7 @@
           <button type="button" aria-pressed="false" data-verdict="limite"><span class="lib"><span class="pastille" style="background:var(--warn-dot)" aria-hidden="true"></span>Limites</span><span class="d-block n num">{{ analyse.resume.limite }}</span><span class="pct">{% widthratio analyse.resume.limite analyse.resume.total 100 %} % des biens</span></button>
           <button type="button" aria-pressed="false" data-verdict="hors_budget"><span class="lib"><span class="pastille" style="background:var(--ko-dot)" aria-hidden="true"></span>Hors budget</span><span class="d-block n num">{{ analyse.resume.hors_budget }}</span><span class="pct">{% widthratio analyse.resume.hors_budget analyse.resume.total 100 %} % des biens</span></button>
         </div>
-        <p class="astuce"><i class="bi bi-hand-index" aria-hidden="true"></i> Clique sur une case pour n'afficher que ces biens.</p>
+        <p class="astuce"><i class="bi bi-hand-index" aria-hidden="true"></i> Cliquez sur une case pour n'afficher que ces biens.</p>
       </div>
     </div>
   </section>
@@ -305,7 +305,7 @@
   <details class="profil carte-blanche mb-3 apparait apparait-3" {% if profil.revenus <= 0 or taux_actualise or source_profil == 'defaut' %}open{% endif %}>
     <summary class="px-3 px-lg-4 py-3 d-flex flex-wrap justify-content-between align-items-center gap-3">
       <span class="d-flex flex-wrap align-items-center gap-3" style="flex: 1 1 30rem; min-width: 0;">
-        <span class="profil-titre"><span class="icone-carre" aria-hidden="true"><i class="bi bi-person"></i></span>Ton profil</span>
+        <span class="profil-titre"><span class="icone-carre" aria-hidden="true"><i class="bi bi-person"></i></span>Votre profil</span>
         <span class="resume-profil">
           <span class="kv"><span class="k">Revenus</span><span class="v num">{{ profil.revenus|floatformat:0|intcomma }} €/mois</span></span>
           <span class="kv"><span class="k">Charges</span><span class="v num">{{ profil.charges|floatformat:0|intcomma }} €</span></span>
@@ -316,25 +316,25 @@
         </span>
       </span>
       <span class="d-flex align-items-center gap-2">
-        {% if source_profil == 'simulation' %}<span class="source source-simulation">repris de ta simulation</span>
-        {% elif source_profil == 'saisie' %}<span class="source source-saisie">ta saisie</span>
+        {% if source_profil == 'simulation' %}<span class="source source-simulation">repris de votre simulation</span>
+        {% elif source_profil == 'saisie' %}<span class="source source-saisie">votre saisie</span>
         {% else %}<span class="source source-defaut">valeurs par défaut, à ajuster</span>{% endif %}
         <span class="bouton-modifier"><span class="ouvrir"><i class="bi bi-pencil" aria-hidden="true"></i> Modifier mon profil</span><span class="fermer"><i class="bi bi-chevron-up" aria-hidden="true"></i> Replier</span></span>
       </span>
     </summary>
     <div class="px-3 px-lg-4 pt-3 pb-4">
       {% if profil.revenus <= 0 %}
-      <p class="mb-3"><i class="bi bi-arrow-right-circle" aria-hidden="true"></i> Complète ton profil pour voir ce que tu peux financer.
-        Tu peux aussi <a href="{% url 'simulateur_pret' %}">faire ta simulation</a> : ses chiffres seront repris ici.</p>
+      <p class="mb-3"><i class="bi bi-arrow-right-circle" aria-hidden="true"></i> Complétez votre profil pour voir ce que vous pouvez financer.
+        Vous pouvez aussi <a href="{% url 'simulateur_pret' %}">faire votre simulation</a> : ses chiffres seront repris ici.</p>
       {% endif %}
       {% include "analyseur/_bareme.html" %}
       {% if taux_actualise %}
       <div class="alert alert-info py-2 small">
         <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> <strong>Taux remis au barème du {{ bareme.date }}</strong>
         <ul class="mb-0">
-          <li>Ton taux enregistré venait d'un ancien barème.</li>
-          <li>Il est remplacé par le taux moyen du jour pour ta durée.</li>
-          <li>Pour un taux adapté à ton profil, <a href="{% url 'simulateur_pret' %}">refais ta simulation</a>.</li>
+          <li>Votre taux enregistré venait d'un ancien barème.</li>
+          <li>Il est remplacé par le taux moyen du jour pour votre durée.</li>
+          <li>Pour un taux adapté à votre profil, <a href="{% url 'simulateur_pret' %}">refaites votre simulation</a>.</li>
         </ul>
       </div>
       {% endif %}
@@ -363,7 +363,7 @@
           {% if source_profil == 'saisie' %}<button class="btn btn-link" name="action" value="reprendre">Reprendre ma simulation</button>{% endif %}
         </div>
       </form>
-      <p id="note-taux-duree" class="small text-primary mt-2 mb-0" hidden aria-live="polite"><i class="bi bi-info-circle" aria-hidden="true"></i> Taux ajusté à la nouvelle durée : plus un prêt est long, plus son taux est élevé. Clique sur « Recalculer ».</p>
+      <p id="note-taux-duree" class="small text-primary mt-2 mb-0" hidden aria-live="polite"><i class="bi bi-info-circle" aria-hidden="true"></i> Taux ajusté à la nouvelle durée : plus un prêt est long, plus son taux est élevé. Cliquez sur « Recalculer ».</p>
       {% include "analyseur/_aide_memoire.html" %}
     </div>
   </details>
@@ -372,7 +372,7 @@
   <div class="alert alert-info">
     <p class="fw-bold mb-1"><i class="bi bi-info-circle" aria-hidden="true"></i> Aucun bien trouvé pour {{ ville.nom }}.</p>
     <ul class="mb-0">
-      <li>Lance Gino sur une agence de cette ville pour récupérer des biens.</li>
+      <li>Lancez Gino sur une agence de cette ville pour récupérer des biens.</li>
       <li>Reviens ensuite sur cette page : elle se mettra à jour toute seule.</li>
     </ul>
   </div>
@@ -451,7 +451,7 @@
   </div>
 
   <ul class="small mute mt-3 mb-0">
-    <li>Coût par mois = mensualité du crédit, assurance comprise, hors charges de copropriété et taxe foncière. La jauge montre ton taux d'endettement ; le trait marque le seuil des 35 %.</li>
+    <li>Coût par mois = mensualité du crédit, assurance comprise, hors charges de copropriété et taxe foncière. La jauge montre votre taux d'endettement ; le trait marque le seuil des 35 %.</li>
     <li>« vs prix du m² » compare le prix au m² du bien au milieu des biens de {{ ville.nom }} (détail au survol).</li>
     {% if analyse.masques %}<li>{{ analyse.masques }} bien{{ analyse.masques|pluralize }} vendu{{ analyse.masques|pluralize }} ou sous compromis masqué{{ analyse.masques|pluralize }}.</li>{% endif %}
     {% for f in analyse.ignores %}<li>Fichier ignoré, illisible : <code>{{ f }}</code></li>{% endfor %}
@@ -469,7 +469,7 @@
 })();
 
 // Le taux dépend de la durée : quand la durée change, le taux suit le barème en
-// gardant ton écart (profil, négociation). Tu peux toujours saisir un autre taux.
+// gardant votre écart (profil, négociation). Un autre taux reste saisissable.
 (function () {
   const duree = document.getElementById('duree');
   const taux = document.getElementById('taux_nominal');

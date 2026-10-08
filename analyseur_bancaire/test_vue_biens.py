@@ -28,14 +28,14 @@ class PageBiensTests(SimpleTestCase):
     def test_sans_profil_liste_sans_verdict_et_invitation(self):
         r = self.client.get(reverse("biens_financables"), {"ville": "fresnes"})
         self.assertContains(r, "https://ex/209")
-        self.assertContains(r, "Complète ton profil")
+        self.assertContains(r, "Complétez votre profil")
         self.assertContains(r, "valeurs par défaut")
 
     def test_profil_saisi_donne_les_verdicts(self):
         r = self.client.post(reverse("biens_financables"), PROFIL, follow=True)
         self.assertContains(r, "Finançable")
         self.assertContains(r, "Hors budget")
-        self.assertContains(r, "ta saisie")
+        self.assertContains(r, "votre saisie")
         self.assertEqual(self.client.session["profil_biens"]["taux_nominal"], 3.33)
 
     def test_ville_inconnue_retombe_sur_la_premiere_ville(self):
